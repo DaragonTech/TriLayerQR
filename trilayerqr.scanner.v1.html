@@ -1,0 +1,3622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TriLayerQR Scanner v1</title>
+<style>
+:root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: light dark; }
+body { margin: 0; padding: 20px; background: Canvas; color: CanvasText; }
+.wrap { max-width: 720px; margin: 0 auto; }
+.card { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; padding: 16px; background: color-mix(in srgb, Canvas 92%, CanvasText 8%); margin-bottom: 16px; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+p.lead { margin: 0 0 8px; opacity: .8; }
+label { display: block; font-weight: 650; margin: 12px 0 6px; }
+input[type="password"], input[type="file"] { font: inherit; }
+input[type="password"] {
+  width: 100%; padding: 9px 10px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+  background: Canvas; color: CanvasText; box-sizing: border-box;
+}
+input[type="file"] { width: 100%; }
+.btn { cursor: pointer; border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 700; background: #2563eb; color: white; margin-top: 12px; font-size: 1rem; }
+.btn.secondary { background: #475569; }
+.btn.full { display: block; width: 100%; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row .btn { flex: 1 1 auto; }
+
+.viewport {
+  position: relative; width: 100%; aspect-ratio: 3 / 4; max-height: 70vh;
+  background: #000; border-radius: 14px; overflow: hidden; display: none;
+}
+.viewport.active { display: block; }
+video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.reticle {
+  position: absolute; inset: 12%; border: 3px solid rgba(255,255,255,.85);
+  border-radius: 16px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.28);
+  pointer-events: none;
+}
+.scanhint {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 12px;
+  background: rgba(0,0,0,.55); color: #fff; font-size: .9rem; text-align: center;
+}
+
+canvas { max-width: 100%; background: white; border-radius: 12px; image-rendering: pixelated; }
+.result-box { margin-top: 12px; }
+.result-box small { display: block; margin-bottom: 6px; opacity: .75; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 12px; padding: 12px; background: color-mix(in srgb, CanvasText 8%, transparent); margin: 6px 0 0; }
+.ok { color: #16a34a; }
+.err { color: #dc2626; }
+.hidden { display: none !important; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent); margin: -4px 0 14px; }
+.tab { background: none; color: inherit; opacity: .65; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: inherit; font-weight: 700; cursor: pointer; margin-bottom: -1px; }
+.tab.active { opacity: 1; border-bottom-color: #2563eb; }
+canvas.card-canvas { display: block; width: 100%; height: auto; background: none; border-radius: 10px; image-rendering: auto; }
+.card-flip { position: relative; perspective: 1800px; }
+.card-flip-inner { position: relative; transition: transform .75s cubic-bezier(.3,.7,.2,1); transform-style: preserve-3d; }
+.card-flip.flipped .card-flip-inner { transform: rotateY(180deg); }
+.card-face { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.card-back { position: absolute; inset: 0; transform: rotateY(180deg); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.card-back canvas { display: block; width: 100%; height: 100%; background: none; border-radius: 10px; image-rendering: auto; max-width: none; }
+.card-memo { position: absolute; left: 49.6%; top: 6.6%; width: 46.2%; height: 82%; display: flex; flex-direction: column; background: rgba(3, 10, 48, 0.62); border: 1px solid rgba(143, 211, 255, 0.5); border-radius: 1.8cqw; box-shadow: 0 0 2.2cqw rgba(110, 190, 255, 0.35), inset 0 0 1.6cqw rgba(110, 190, 255, 0.14); color: #eef6ff; cursor: auto; text-align: left; }
+.card-memo[hidden] { display: none; }
+.card-memo.full { left: 6%; width: 88%; } /* no picture: the memo takes the width of the card */
+.card-memo-title { font: 700 1.8cqw/1 Orbitron, system-ui, sans-serif; letter-spacing: 0.3cqw; color: #8fd3ff; padding: 1.8cqw 2.2cqw 1.1cqw; text-shadow: 0 0 1cqw rgba(110, 190, 255, 0.9); }
+.card-memo-text { flex: 1; min-height: 0; overflow: auto; margin: 0 0.6cqw 1.2cqw 0; padding: 0 1.6cqw 0 2.2cqw; font: 500 max(10.5px, 1.75cqw)/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; scrollbar-width: thin; scrollbar-color: rgba(143, 211, 255, 0.6) rgba(143, 211, 255, 0.08); }
+.card-memo-text::-webkit-scrollbar { width: max(6px, 0.8cqw); }
+.card-memo-text::-webkit-scrollbar-track { background: rgba(143, 211, 255, 0.08); border-radius: 99px; }
+.card-memo-text::-webkit-scrollbar-thumb { background: rgba(143, 211, 255, 0.55); border-radius: 99px; box-shadow: 0 0 6px rgba(110, 190, 255, 0.8); }
+.card-memo-text::-webkit-scrollbar-thumb:hover { background: rgba(190, 228, 255, 0.8); }
+/* Glass reflection: a diagonal light sweep across the card every few seconds (screen only) */
+.card-shine { position: absolute; inset: 0; border-radius: 10px; overflow: hidden; pointer-events: none; z-index: 2; }
+.card-shine::before { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 36%, rgba(255,255,255,0) 40%, rgba(255,255,255,0.3) 43.5%, rgba(255,255,255,0.06) 45.5%, rgba(255,255,255,0.2) 47.5%, rgba(255,255,255,0.03) 49.5%, rgba(255,255,255,0.13) 51%, rgba(255,255,255,0) 54%, transparent 58%); background-size: 260% 100%; background-repeat: no-repeat; background-position: 100% 0; mix-blend-mode: screen; animation: cardShine 7s ease-in-out 1.5s infinite; }
+@keyframes cardShine { 0% { background-position: 100% 0; } 24% { background-position: 0% 0; } 100% { background-position: 0% 0; } }
+@media (prefers-reduced-motion: reduce) { .card-shine::before { animation: none; opacity: 0; } }
+.card-flip.has-back .card-face { cursor: pointer; }
+#memoImage { display: block; max-width: 100%; border-radius: 12px; margin-top: 6px; }
+.zoom-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+.zoom-row label { margin: 0; }
+.zoom-row input { flex: 1; }
+.caption-opts label.inline-check { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
+.caption-opts input[type="checkbox"] { width: 18px; height: 18px; }
+.opt-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.opt-row select {
+  font: inherit; width: 100%; padding: 8px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+  background: Canvas; color: CanvasText;
+}
+</style>
+<link href="vendor/fonts/fonts.css" rel="stylesheet" />
+</head>
+<body>
+<div class="wrap">
+
+<div class="card">
+  <h1>Scan a TriLayerQR code</h1>
+  <p class="lead">Point your camera at a QR made by the TriLayerQR editor, or open a QR link from your phone's camera app. If it was encrypted, you'll be asked for the password.</p>
+
+  <div class="row">
+    <button id="startBtn" class="btn">Start camera</button>
+    <button id="stopBtn" class="btn secondary hidden">Stop camera</button>
+    <button id="torchBtn" class="btn secondary hidden">Flashlight</button>
+  </div>
+  <div id="zoomRow" class="zoom-row hidden">
+    <label for="zoomRange">Zoom</label>
+    <input id="zoomRange" type="range" min="1" max="4" step="0.1" value="1" />
+    <output id="zoomOut">1.0&times;</output>
+  </div>
+
+  <div id="viewport" class="viewport">
+    <video id="video" playsinline webkit-playsinline muted></video>
+    <div class="reticle"></div>
+    <div id="scanhint" class="scanhint">Looking for a QR code...</div>
+  </div>
+
+  <label for="photoFile">No camera? Decode from a photo or card PDF instead</label>
+  <input id="photoFile" type="file" accept="image/*,application/pdf,.pdf" />
+
+  <pre id="status">Tap "Start camera", or pick a photo of a QR code.</pre>
+</div>
+
+<div id="passwordCard" class="card hidden">
+  <h1 style="font-size:1.1rem;">This QR is encrypted</h1>
+  <p class="lead">Enter the password that was used when the QR was created.</p>
+  <label for="passwordInput">Password</label>
+  <input id="passwordInput" type="password" placeholder="Decryption password" autocomplete="off" />
+  <button id="decryptBtn" class="btn full">Decode</button>
+  <pre id="passwordStatus" class="hidden"></pre>
+</div>
+
+<div id="resultCard" class="card hidden">
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab active" role="tab" data-tab="card" aria-selected="true">Card</button>
+    <button type="button" class="tab" role="tab" data-tab="results" aria-selected="false">Decode results</button>
+  </div>
+
+  <div class="tab-panel" data-panel="card">
+    <div id="cardFlip" class="card-flip"><div class="card-flip-inner">
+      <canvas id="cardCanvas" class="card-canvas card-face" width="700" height="440"></canvas>
+      <div id="cardBack" class="card-face card-back"><canvas id="cardBackCanvas" width="1400" height="880"></canvas><div id="cardBackMemo" class="card-memo" hidden><div class="card-memo-title">MEMO</div><div id="cardBackMemoText" class="card-memo-text"></div></div></div>
+    </div><div class="card-shine" aria-hidden="true"></div></div>
+    <div class="row">
+      <button id="flipCardBtn" class="btn" hidden>Flip card</button>
+      <button id="downloadCardBtn" class="btn">Download card PNG</button>
+      <button id="downloadCardPdfBtn" class="btn">Download card PDF</button>
+    </div>
+  </div>
+
+  <div class="tab-panel hidden" data-panel="results">
+  <h1 id="restoredHeading" style="font-size:1.1rem;">Restored image</h1>
+  <div class="result-box">
+    <canvas id="restoredCanvas" width="1" height="1"></canvas>
+  </div>
+  <div class="result-box caption-opts">
+    <label class="inline-check"><input id="captionOnImage" type="checkbox" checked /> Draw caption on image</label>
+    <div class="opt-row" id="captionStyleRow">
+      <select id="captionStyle" aria-label="Caption style">
+        <option value="strip" selected>Strip</option>
+        <option value="band">Band</option>
+        <option value="outline">Outline</option>
+      </select>
+      <select id="captionSize" aria-label="Caption size">
+        <option value="small">Small</option>
+        <option value="medium" selected>Medium</option>
+        <option value="large">Large</option>
+      </select>
+      <select id="captionColor" aria-label="Caption color">
+        <option value="white" selected>White</option>
+        <option value="amber">Amber</option>
+        <option value="green">Green</option>
+        <option value="cyan">Cyan</option>
+        <option value="pink">Pink</option>
+      </select>
+    </div>
+  </div>
+  <div class="result-box">
+    <small>Caption</small>
+    <pre id="restoredCaption">(none)</pre>
+  </div>
+  <div id="descriptionBox" class="result-box hidden">
+    <small>Description</small>
+    <pre id="restoredDescription"></pre>
+  </div>
+  <div id="footerBox" class="result-box hidden">
+    <small>Footer</small>
+    <pre id="restoredFooter"></pre>
+  </div>
+  <div id="memoBox" class="result-box hidden">
+    <small id="memoLabel">Memo</small>
+    <pre id="restoredMemo" style="max-height:50vh; overflow:auto;"></pre>
+    <img id="memoImage" class="hidden" alt="Picture from the color layers" />
+    <button id="copyMemoBtn" class="btn secondary">Copy memo</button>
+    <button id="downloadMemoImageBtn" class="btn secondary hidden">Download picture</button>
+  </div>
+  <div class="result-box">
+    <small>Details</small>
+    <pre id="resultStatus" class="ok"></pre>
+  </div>
+  <div class="row">
+    <button id="downloadBtn" class="btn">Download image</button>
+  </div>
+  </div>
+
+  <div class="row">
+    <button id="againBtn" class="btn secondary">Scan again</button>
+  </div>
+</div>
+
+</div>
+
+<script src="vendor/qrcode-generator/qrcode.js"></script>
+<script src="vendor/jsqr/jsQR.js"></script>
+<script src="vendor/zxing-wasm/zxing-reader.iife.js"></script>
+
+<script>
+'use strict';
+
+const $ = id => document.getElementById(id);
+
+const startBtn = $('startBtn');
+const stopBtn = $('stopBtn');
+const torchBtn = $('torchBtn');
+const viewport = $('viewport');
+const video = $('video');
+const scanhint = $('scanhint');
+const photoFile = $('photoFile');
+const statusEl = $('status');
+
+const passwordCard = $('passwordCard');
+const passwordInput = $('passwordInput');
+const decryptBtn = $('decryptBtn');
+const passwordStatus = $('passwordStatus');
+
+const resultCard = $('resultCard');
+const restoredCanvas = $('restoredCanvas');
+const restoredCaption = $('restoredCaption');
+const resultStatus = $('resultStatus');
+const downloadBtn = $('downloadBtn');
+const againBtn = $('againBtn');
+
+const textDecoder = new TextDecoder();
+
+let stream = null;
+let track = null;
+let rafId = 0;
+let scanning = false;
+let lastScan = 0;
+let pendingPayload = null;
+let torchOn = false;
+let lastTransport = '';
+let memoParts = null;      // color memo layers collected so far
+let memoDeadline = 0;
+let memoResult = null;     // the image QR result waiting for its memo
+let pendingMemoParts = null;
+let pendingMemoText = '';     // memo text shown on the back of the card
+let pendingMemoPicture = null; // decoded HD picture memo ({ role, bytes, mime, element })
+let lastQrSource = null;   // { segments, ecc, label, payloadBytes } of the scanned QR
+
+/* ---------- status helpers ---------- */
+function setStatus(msg, cls = '') { statusEl.className = cls; statusEl.textContent = msg; }
+function setScanHint(msg) { scanhint.textContent = msg; }
+function show(el) { el.classList.remove('hidden'); }
+function hide(el) { el.classList.add('hidden'); }
+
+/* ---------- Decoder: copied verbatim from the encoder (v15) so both stay in sync ---------- */
+
+const textEncoder = new TextEncoder();
+
+const SCANLINE_RAW = 0;
+const SCANLINE_DELTA_ROWS = 1;
+const SCANLINE_SERPENTINE = 2;
+const COMPRESSION_RAW = 0;
+const COMPRESSION_RLE = 1;
+const SHAPE_RECT = 0;
+const SHAPE_CIRCLE = 1;
+const FORMAT_1BIT = 1;
+const FORMAT_INDEXED8 = 8;
+const FORMAT_INDEXED16 = 16;
+const FORMAT_GRAY4 = 0x24;   // 4 fixed gray levels, 2 bits/pixel
+const FORMAT_GRAY16 = 0x28;  // 16 fixed gray levels, 4 bits/pixel
+const FORMAT_VQ4 = 0x44;     // 4x4 block codebook, 12 bits per block
+const FORMAT_WEBP_COLOR = 0x57; // WebP file bytes, color ('W')
+const FORMAT_WEBP_GRAY = 0x47;  // WebP file bytes, grayscale ('G')
+const FORMAT_NONE = 0x00;       // no picture: a card made of text only
+const VQ_BLOCK = 4;
+const VQ_LEVEL_STEP = 17; // 255 / 15
+
+
+function base64UrlToBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+
+  return out;
+}
+
+function parseQrText(text) {
+  if (!text.startsWith('IMGQR1.')) throw new Error('QR text does not start with IMGQR1.');
+  return base64UrlToBytes(text.slice(7));
+}
+
+/* ---------- QR transports ----------
+  binary : raw payload bytes in one byte-mode segment (most capacity, needs these decoders)
+  link   : "<decoder URL>#<data>" as two QR segments: the URL in byte mode, the data in
+           alphanumeric mode (base41, 3 characters per 2 bytes, about 97% as dense as
+           binary). Phone cameras and Google Lens offer to open the link; the part after
+           # stays on the phone and is never sent to the web server.
+  base64 : legacy "IMGQR1.<base64url>" text
+*/
+const BASE41 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-./:';
+
+function base41Encode(bytes) {
+  let s = '';
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    let v = bytes[i] * 256 + bytes[i + 1];
+    s += BASE41[v % 41]; v = Math.floor(v / 41);
+    s += BASE41[v % 41]; v = Math.floor(v / 41);
+    s += BASE41[v];
+  }
+  if (bytes.length % 2) {
+    const v = bytes[bytes.length - 1];
+    s += BASE41[v % 41] + BASE41[Math.floor(v / 41)];
+  }
+  return s;
+}
+
+function base41Decode(str) {
+  const s = str.toUpperCase();
+  const val = c => {
+    const v = BASE41.indexOf(c);
+    if (v < 0) throw new Error('The link data contains an invalid character.');
+    return v;
+  };
+  const out = [];
+  let i = 0;
+  for (; i + 3 <= s.length; i += 3) {
+    const v = val(s[i]) + val(s[i + 1]) * 41 + val(s[i + 2]) * 1681;
+    if (v > 65535) throw new Error('The link data is damaged.');
+    out.push(v >> 8, v & 255);
+  }
+  if (s.length - i === 2) {
+    const v = val(s[i]) + val(s[i + 1]) * 41;
+    if (v > 255) throw new Error('The link data is damaged.');
+    out.push(v);
+  } else if (s.length - i === 1) {
+    throw new Error('The link data is incomplete.');
+  }
+  return Uint8Array.from(out);
+}
+
+const LINK_DATA_PATTERN = /^https?:\/\/[^#\s]*#([0-9A-Za-z+\-./:]+)\s*$/i;
+
+function hasPayloadMagic(bytes) {
+  return bytes.length >= 4 && bytes[0] === 0x49 && bytes[1] === 0x51 && bytes[2] === 0x52 && bytes[3] === 0x33;
+}
+
+// Works on a normalized scan result { binaryData, data } from zxing-wasm or jsQR.
+function qrResultToPayload(result) {
+  const bytes = Uint8Array.from(result.binaryData || []);
+  if (hasPayloadMagic(bytes)) return { payload: bytes, transport: 'raw binary', qrBytes: bytes.length };
+
+  const text = result.data || String.fromCharCode(...bytes);
+  if (text.startsWith('IMGQR1.')) {
+    return { payload: parseQrText(text), transport: 'base64 text', qrBytes: text.length };
+  }
+
+  const link = LINK_DATA_PATTERN.exec(text);
+  if (link) {
+    const payload = base41Decode(link[1]);
+    if (hasPayloadMagic(payload)) return { payload, transport: 'phone-camera link', qrBytes: text.length };
+  }
+
+  throw new Error('This QR does not contain an image payload from this page.');
+}
+
+/* ---------- Scanning: zxing-wasm (ZXing-C++) first, jsQR as fallback ----------
+  zxing-wasm reads dense, small or blurry Version-40 codes far more reliably than jsQR.
+  Its WebAssembly file (~0.9 MB) loads from the jsDelivr CDN on first use.
+*/
+const ZXING_WASM_URL = 'vendor/zxing-wasm/zxing_reader.wasm';
+
+function zxingAvailable() {
+  return typeof ZXingWASM !== 'undefined';
+}
+
+if (zxingAvailable()) {
+  try {
+    ZXingWASM.setZXingModuleOverrides({ locateFile: (file, prefix) => (file.endsWith('.wasm') ? ZXING_WASM_URL : prefix + file) });
+    ZXingWASM.prepareZXingModule({ fireImmediately: true }).catch(() => {});
+  } catch (e) { /* fall back to jsQR */ }
+}
+
+async function scanQr(imageData, { invert = true } = {}) {
+  if (zxingAvailable()) {
+    try {
+      const found = await ZXingWASM.readBarcodes(imageData, {
+        formats: ['QRCode'],
+        tryHarder: true,
+        tryInvert: invert,
+        maxNumberOfSymbols: 1
+      });
+      if (found.length && found[0].isValid) return { binaryData: found[0].bytes, data: found[0].text, engine: 'zxing', ecLevel: found[0].ecLevel, position: found[0].position };
+    } catch (e) { /* WASM not loaded (offline?) -> jsQR below */ }
+  }
+  const j = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: invert ? 'attemptBoth' : 'dontInvert' });
+  if (!j) return null;
+  const L = j.location;
+  return { binaryData: j.binaryData, data: j.data, engine: 'jsQR',
+    position: { topLeft: L.topLeftCorner, topRight: L.topRightCorner, bottomRight: L.bottomRightCorner, bottomLeft: L.bottomLeftCorner } };
+}
+
+// Full image first; for color QRs the green channel alone is a clean copy of the image layer.
+async function scanImageQr(imageData, options) {
+  const r = await scanQr(imageData, options);
+  if (r) return r;
+  return scanQr(new ImageData(channelAsGray(imageData, 1), imageData.width, imageData.height), options);
+}
+
+function readU32be(bytes, offset) {
+  return (
+    bytes[offset] * 0x1000000 +
+    ((bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3])
+  );
+}
+
+function parseProtectedBlob(blob, hasDescription = false, hasFooter = false) {
+  if (blob.length < 4) throw new Error('Protected payload is too short.');
+  let o = 0;
+  const take = what => {
+    if (o + 4 > blob.length) throw new Error(`${what} is missing.`);
+    const len = readU32be(blob, o);
+    o += 4;
+    if (o + len > blob.length) throw new Error(`${what} length exceeds payload.`);
+    const text = textDecoder.decode(blob.slice(o, o + len));
+    o += len;
+    return text;
+  };
+  const caption = take('Caption');
+  const description = hasDescription ? take('Description') : '';
+  const footer = hasFooter ? take('Footer') : '';
+  return { caption, description, footer, imageBytes: blob.slice(o) };
+}
+
+async function deriveAesKeyFromPassword(password, salt) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations: 250000,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    {
+      name: 'AES-GCM',
+      length: 256
+    },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function decryptBytes(encrypted, password, salt, iv) {
+  const key = await deriveAesKeyFromPassword(password, salt);
+
+  return new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encrypted
+    )
+  );
+}
+
+function packIndexes(indexes, bitsPerPixel) {
+  const totalBits = indexes.length * bitsPerPixel;
+  const out = new Uint8Array(Math.ceil(totalBits / 8));
+  let bitPos = 0;
+
+  for (let i = 0; i < indexes.length; i++) {
+    const value = indexes[i];
+
+    for (let b = bitsPerPixel - 1; b >= 0; b--) {
+      if (value & (1 << b)) {
+        const bytePos = bitPos >> 3;
+        const bitInByte = 7 - (bitPos & 7);
+        out[bytePos] |= 1 << bitInByte;
+      }
+      bitPos++;
+    }
+  }
+
+  return out;
+}
+
+function unpackIndexes(bytes, expectedPixels, bitsPerPixel) {
+  const out = bitsPerPixel > 8 ? new Uint16Array(expectedPixels) : new Uint8Array(expectedPixels);
+  let bitPos = 0;
+
+  for (let i = 0; i < expectedPixels; i++) {
+    let value = 0;
+
+    for (let b = 0; b < bitsPerPixel; b++) {
+      const bytePos = bitPos >> 3;
+      const bitInByte = 7 - (bitPos & 7);
+      value = (value << 1) | ((bytes[bytePos] >> bitInByte) & 1);
+      bitPos++;
+    }
+
+    out[i] = value;
+  }
+
+  return out;
+}
+
+function rleDecompress(bytes, expectedLength) {
+  const out = new Uint8Array(expectedLength);
+  let o = 0;
+
+  for (let i = 0; i < bytes.length; i += 2) {
+    if (i + 1 >= bytes.length) throw new Error('Bad RLE data.');
+
+    const count = bytes[i];
+    const value = bytes[i + 1];
+
+    if (o + count > expectedLength) throw new Error('RLE expands beyond expected length.');
+
+    out.fill(value, o, o + count);
+    o += count;
+  }
+
+  if (o !== expectedLength) throw new Error('RLE length mismatch.');
+
+  return out;
+}
+
+function reversePackedBitRows(bytes, width, height) {
+  const out = new Uint8Array(bytes.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const srcP = y * width + x;
+      const dstP = y * width + (width - 1 - x);
+      if (bytes[srcP >> 3] & (1 << (7 - (srcP & 7)))) {
+        out[dstP >> 3] |= 1 << (7 - (dstP & 7));
+      }
+    }
+  }
+
+  return out;
+}
+
+function unxorPackedBitRowsWithPrevious(bytes, width, height) {
+  const out = new Uint8Array(bytes.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      const delta = (bytes[p >> 3] >> (7 - (p & 7))) & 1;
+      let prev = 0;
+
+      if (y > 0) {
+        const pp = (y - 1) * width + x;
+        prev = (out[pp >> 3] >> (7 - (pp & 7))) & 1;
+      }
+
+      if (delta ^ prev) out[p >> 3] |= 1 << (7 - (p & 7));
+    }
+  }
+
+  return out;
+}
+
+function unserpentineIndexes(indexes, width, height) {
+  const out = new Uint8Array(indexes.length);
+
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      out[row + ((y & 1) ? width - 1 - x : x)] = indexes[row + x];
+    }
+  }
+
+  return out;
+}
+
+function undeltaIndexesByRows(indexes, width, height) {
+  const out = new Uint8Array(indexes.length);
+
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    for (let x = 0; x < width; x++) {
+      const delta = indexes[row + x];
+      const prev = y > 0 ? out[row - width + x] : 0;
+      out[row + x] = delta ^ prev;
+    }
+  }
+
+  return out;
+}
+
+function restoreScanlineTransform(format, bytes, width, height, bitsPerPixel, transform) {
+  if (transform === SCANLINE_RAW) return bytes;
+
+  if (format === 1) {
+    if (transform === SCANLINE_DELTA_ROWS) return unxorPackedBitRowsWithPrevious(bytes, width, height);
+    if (transform === SCANLINE_SERPENTINE) return reversePackedBitRows(bytes, width, height);
+  } else {
+    const transformedIndexes = unpackIndexes(bytes, width * height, bitsPerPixel);
+
+    if (transform === SCANLINE_DELTA_ROWS) return packIndexes(undeltaIndexesByRows(transformedIndexes, width, height), bitsPerPixel);
+    if (transform === SCANLINE_SERPENTINE) return packIndexes(unserpentineIndexes(transformedIndexes, width, height), bitsPerPixel);
+  }
+
+  throw new Error('Unsupported scanline transform.');
+}
+
+function scanlineTransformName(transform) {
+  if (transform === SCANLINE_DELTA_ROWS) return 'delta rows';
+  if (transform === SCANLINE_SERPENTINE) return 'serpentine rows';
+  return 'none';
+}
+
+function isInsideCirclePixel(x, y, width, height) {
+  const cx = (width - 1) / 2;
+  const cy = (height - 1) / 2;
+  const r = Math.min(width, height) / 2;
+  const dx = x - cx;
+  const dy = y - cy;
+  return dx * dx + dy * dy <= r * r;
+}
+
+function countCirclePixels(width, height) {
+  let count = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isInsideCirclePixel(x, y, width, height)) count++;
+    }
+  }
+  return count;
+}
+
+function expandCircleBits(circleBits, width, height) {
+  const out = new Uint8Array(Math.ceil(width * height / 8));
+  let q = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      if (!isInsideCirclePixel(x, y, width, height)) {
+        out[p >> 3] |= 1 << (7 - (p & 7)); // black corner
+        continue;
+      }
+
+      if (circleBits[q >> 3] & (1 << (7 - (q & 7)))) {
+        out[p >> 3] |= 1 << (7 - (p & 7));
+      }
+      q++;
+    }
+  }
+
+  return out;
+}
+
+function expandCircleIndexes(circleIndexes, width, height, blackIndex = 0) {
+  const out = new Uint8Array(width * height);
+  out.fill(blackIndex);
+  let q = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isInsideCirclePixel(x, y, width, height)) out[y * width + x] = circleIndexes[q++];
+    }
+  }
+
+  return out;
+}
+
+function formatDisplayName(format, paletteSize) {
+  if (format === FORMAT_NONE) return 'No image';
+  if (format === FORMAT_1BIT) return '1-bit black/white';
+  if (format === FORMAT_GRAY4) return '4-level grayscale (2 bits/pixel)';
+  if (format === FORMAT_GRAY16) return '16-level grayscale (4 bits/pixel)';
+  if (format === FORMAT_VQ4) return 'Grayscale 4x4 block codebook (0.75 bits/pixel)';
+  if (format === FORMAT_WEBP_COLOR) return 'WebP color (compressed)';
+  if (format === FORMAT_WEBP_GRAY) return 'WebP grayscale (compressed)';
+  return `${paletteSize}-color pixelized`;
+}
+
+function grayLevelsForFormat(format) {
+  if (format === FORMAT_GRAY4) return 4;
+  if (format === FORMAT_GRAY16) return 16;
+  return 0;
+}
+
+function grayPalette(levels) {
+  return Array.from({ length: levels }, (_, i) => {
+    const v = Math.round(i * 255 / (levels - 1));
+    return [v, v, v];
+  });
+}
+
+function buildVqShapes() {
+  const shapes = [];
+  const seen = new Set();
+
+  const add = vals => {
+    if (shapes.length >= 256) return;
+    let m = 0;
+    for (let i = 0; i < 16; i++) m += vals[i];
+    m /= 16;
+    const s = new Int16Array(16);
+    for (let i = 0; i < 16; i++) s[i] = Math.round(vals[i] - m);
+    const key = s.join(',');
+    if (seen.has(key)) return;
+    seen.add(key);
+    shapes.push(s);
+  };
+
+  const dirs = [
+    [1, 0], [2, 1], [1, 1], [1, 2], [0, 1], [-1, 2], [-1, 1], [-2, 1],
+    [-1, 0], [-2, -1], [-1, -1], [-1, -2], [0, -1], [1, -2], [1, -1], [2, -1]
+  ];
+  const proj = (d, i) => {
+    const x = (i & 3) - 1.5;
+    const y = (i >> 2) - 1.5;
+    return (d[0] * x + d[1] * y) / Math.sqrt(d[0] * d[0] + d[1] * d[1]);
+  };
+  const pattern = f => Array.from({ length: 16 }, (_, i) => f(i));
+
+  // 1. Flat block
+  add(pattern(() => 0));
+
+  // 2. Linear gradients: 16 directions x 4 strengths
+  for (const a of [10, 24, 44, 72]) {
+    for (const d of dirs) add(pattern(i => a * proj(d, i) / 1.5));
+  }
+
+  // 3. Step edges: 16 directions x 3 positions x 4 contrasts
+  for (const a of [14, 32, 58, 96]) {
+    for (const o of [0, -0.8, 0.8]) {
+      for (const d of dirs) add(pattern(i => (proj(d, i) > o ? a : -a)));
+    }
+  }
+
+  // 4. Thin lines and dots, only used if slots remain after dedupe
+  for (const a of [40, 90]) {
+    for (let k = 0; k < 4; k++) {
+      add(pattern(i => ((i >> 2) === k ? a : 0)));
+      add(pattern(i => ((i >> 2) === k ? -a : 0)));
+      add(pattern(i => ((i & 3) === k ? a : 0)));
+      add(pattern(i => ((i & 3) === k ? -a : 0)));
+    }
+    add(pattern(i => ((i & 3) === (i >> 2) ? a : 0)));
+    add(pattern(i => ((i & 3) === (i >> 2) ? -a : 0)));
+    add(pattern(i => ((i & 3) === 3 - (i >> 2) ? a : 0)));
+    add(pattern(i => ((i & 3) === 3 - (i >> 2) ? -a : 0)));
+  }
+
+  if (shapes.length !== 256) throw new Error('Codebook generation failed: ' + shapes.length + ' shapes.');
+  return shapes;
+}
+
+function vqBlockStored(bx, by, width, height, circle) {
+  if (!circle) return true;
+  for (let dy = 0; dy < VQ_BLOCK; dy++) {
+    for (let dx = 0; dx < VQ_BLOCK; dx++) {
+      const x = bx * VQ_BLOCK + dx, y = by * VQ_BLOCK + dy;
+      if (x < width && y < height && isInsideCirclePixel(x, y, width, height)) return true;
+    }
+  }
+  return false;
+}
+
+function vqRender(codes, bw, width, height, circle) {
+  const out = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      if (circle && !isInsideCirclePixel(x, y, width, height)) { out[p] = 0; continue; }
+      const code = codes[(y >> 2) * bw + (x >> 2)];
+      const shape = VQ_SHAPES[code & 255];
+      out[p] = (code >> 8) * VQ_LEVEL_STEP + shape[((y & 3) << 2) | (x & 3)];
+    }
+  }
+  return out;
+}
+
+function countVqStoredBlocks(bw, bh, width, height, circle) {
+  if (!circle) return bw * bh;
+  let n = 0;
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) if (vqBlockStored(bx, by, width, height, true)) n++;
+  }
+  return n;
+}
+
+function expandVqCodes(stored, bw, bh, width, height, circle) {
+  if (!circle) return stored;
+  const out = new Uint16Array(bw * bh);
+  let q = 0;
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      if (vqBlockStored(bx, by, width, height, true)) out[by * bw + bx] = stored[q++];
+    }
+  }
+  return out;
+}
+
+/* ---------- Card as PDF ----------
+  Messaging apps re-compress images (JPEG), which blurs the memo colors, but they send
+  PDF files untouched. The card is stored in the PDF as a lossless (deflate) RGB image,
+  so every pixel survives. The scanner reads these PDFs back directly.
+*/
+async function zlibBytes(bytes, mode) {
+  const stream = new Blob([bytes]).stream().pipeThrough(mode === 'inflate' ? new DecompressionStream('deflate') : new CompressionStream('deflate'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function pdfEscapeText(s) {
+  // PDF text string as UTF-16BE hex, safe for any characters.
+  let hex = 'FEFF';
+  for (const ch of String(s)) {
+    const cp = ch.codePointAt(0);
+    const units = cp > 0xffff ? [0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff)] : [cp];
+    for (const u of units) hex += u.toString(16).padStart(4, '0').toUpperCase();
+  }
+  return '<' + hex + '>';
+}
+
+async function canvasToPdfBlob(canvas, title = 'TriLayerQR card') {
+  const w = canvas.width, h = canvas.height;
+  const rgba = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+  const rgb = new Uint8Array(w * h * 3);
+  for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) { rgb[j] = rgba[i]; rgb[j + 1] = rgba[i + 1]; rgb[j + 2] = rgba[i + 2]; }
+  const image = await zlibBytes(rgb, 'deflate');
+
+  const enc = new TextEncoder();
+  const parts = [];
+  const offsets = [];
+  let length = 0;
+  const push = chunk => { const b = typeof chunk === 'string' ? enc.encode(chunk) : chunk; parts.push(b); length += b.length; };
+  const obj = (n, body) => { offsets[n] = length; push(`${n} 0 obj\n${body}\nendobj\n`); };
+
+  // 1 px = 1 pt. /Interpolate false keeps the QR squares sharp when zoomed.
+  const content = `q ${w} 0 0 ${h} 0 0 cm /Card Do Q`;
+  push('%PDF-1.4\n');
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Card 5 0 R >> >> /Contents 4 0 R >>`);
+  obj(4, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+  offsets[5] = length;
+  push(`5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Interpolate false /Length ${image.length} >>\nstream\n`);
+  push(image);
+  push('\nendstream\nendobj\n');
+  obj(6, `<< /Title ${pdfEscapeText(title)} /Creator (TriLayerQR) /Producer (TriLayerQR) >>`);
+
+  const xref = length;
+  let table = `xref\n0 7\n0000000000 65535 f \n`;
+  for (let n = 1; n <= 6; n++) table += String(offsets[n]).padStart(10, '0') + ' 00000 n \n';
+  push(table + `trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(parts, { type: 'application/pdf' });
+}
+
+async function downloadCanvasAsPdf(canvas, filename, title) {
+  const blob = await canvasToPdfBlob(canvas, title);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+function isPdfFile(file) {
+  return !!file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''));
+}
+
+// Reads the largest RGB/gray image of a PDF (TriLayerQR card PDFs, and most PDFs that
+// simply wrap an image). Returns ImageData.
+async function pdfFileToImageData(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+
+  const objects = new Map();
+  const objRe = /(\d+)\s+0\s+obj\b/g;
+  let m;
+  while ((m = objRe.exec(text))) objects.set(+m[1], m.index + m[0].length);
+  const num = (dict, key) => {
+    const r = new RegExp('/' + key + '\\s+(\\d+)(\\s+0\\s+R)?').exec(dict);
+    if (!r) return null;
+    if (!r[2]) return +r[1];
+    const at = objects.get(+r[1]);
+    const v = at != null && /^\s*(\d+)/.exec(text.slice(at, at + 40));
+    return v ? +v[1] : null;
+  };
+
+  const candidates = [];
+  const imgRe = /\/Subtype\s*\/Image/g;
+  while ((m = imgRe.exec(text))) {
+    const start = text.lastIndexOf('<<', m.index);
+    const streamAt = text.indexOf('stream', m.index);
+    if (start < 0 || streamAt < 0) continue;
+    const dict = text.slice(start, streamAt);
+    const width = num(dict, 'Width'), height = num(dict, 'Height'), len = num(dict, 'Length');
+    if (!width || !height || !len) continue;
+    let dataAt = streamAt + 6;
+    if (text[dataAt] === '\r') dataAt++;
+    if (text[dataAt] === '\n') dataAt++;
+    candidates.push({ dict, width, height, data: bytes.subarray(dataAt, dataAt + len) });
+  }
+  candidates.sort((a, b) => b.width * b.height - a.width * a.height);
+
+  for (const c of candidates) {
+    try {
+      if (/\/DCTDecode/.test(c.dict)) { // JPEG inside the PDF
+        const img = await loadImageFromFile(new Blob([c.data], { type: 'image/jpeg' }));
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        const cx = cv.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0);
+        return cx.getImageData(0, 0, cv.width, cv.height);
+      }
+      if (!/\/FlateDecode/.test(c.dict) || /\/DecodeParms/.test(c.dict) || (num(c.dict, 'BitsPerComponent') || 8) !== 8) continue;
+      const channels = /\/DeviceGray/.test(c.dict) ? 1 : /\/DeviceRGB/.test(c.dict) ? 3 : 0;
+      if (!channels) continue;
+      const raw = await zlibBytes(c.data, 'inflate');
+      if (raw.length < c.width * c.height * channels) continue;
+      const out = new ImageData(c.width, c.height);
+      for (let p = 0, s = 0; p < out.data.length; p += 4, s += channels) {
+        out.data[p] = raw[s];
+        out.data[p + 1] = raw[s + (channels === 3 ? 1 : 0)];
+        out.data[p + 2] = raw[s + (channels === 3 ? 2 : 0)];
+        out.data[p + 3] = 255;
+      }
+      return out;
+    } catch (e) { /* try the next image */ }
+  }
+  throw new Error('No readable image found in this PDF. Use a card PDF downloaded from TriLayerQR.');
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('No file selected.'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not load image.')); };
+    img.src = url;
+  });
+}
+
+async function decodeImageBytes(bytes, mime) {
+  const img = await loadImageFromFile(new Blob([bytes], { type: mime }));
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  return ctx.getImageData(0, 0, c.width, c.height);
+}
+
+function blackOutsideCircle(imageData) {
+  const { width, height, data } = imageData;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isInsideCirclePixel(x, y, width, height)) continue;
+      const i = (y * width + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 0;
+      data[i + 3] = 255;
+    }
+  }
+  return imageData;
+}
+
+function drawImageDataToCanvas(imageData, canvas, scale = 1) {
+  canvas.width = imageData.width * scale;
+  canvas.height = imageData.height * scale;
+  const tmp = document.createElement('canvas');
+  tmp.width = imageData.width;
+  tmp.height = imageData.height;
+  tmp.getContext('2d').putImageData(imageData, 0, 0);
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+function drawGrayToCanvas(values, width, height, canvas, scale = 1) {
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const img = ctx.createImageData(width, height);
+  for (let p = 0; p < width * height; p++) {
+    const i = p * 4;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = values[p];
+    img.data[i + 3] = 255;
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+function drawBitsToCanvas(bits, width, height, canvas, scale = 1) {
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const img = ctx.createImageData(width, height);
+
+  for (let p = 0; p < width * height; p++) {
+    const isBlack = (bits[p >> 3] & (1 << (7 - (p & 7)))) !== 0;
+    const v = isBlack ? 0 : 255;
+    const i = p * 4;
+    img.data[i] = v;
+    img.data[i + 1] = v;
+    img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+function drawIndexedToCanvas(indexes, palette, width, height, canvas, scale = 1) {
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const img = ctx.createImageData(width, height);
+
+  for (let p = 0; p < width * height; p++) {
+    const c = palette[indexes[p]] || [255, 255, 255];
+    const i = p * 4;
+
+    img.data[i] = c[0];
+    img.data[i + 1] = c[1];
+    img.data[i + 2] = c[2];
+    img.data[i + 3] = 255;
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = width;
+  tmp.height = height;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+async function parsePayload(payload, password = '') {
+  if (payload.length < 21) throw new Error('Payload too short.');
+
+  const magic = String.fromCharCode(payload[0], payload[1], payload[2], payload[3]);
+  if (magic !== 'IQR3') throw new Error('Unsupported payload. This version expects IQR3.');
+
+  const version = payload[4];
+  if (version < 1 || version > 6) throw new Error('Unsupported payload version. It may need a newer version of this page.');
+
+  const format = payload[5];
+  const compression = payload[6];
+  const encrypted = payload[7] === 1;
+
+  const width = (payload[8] << 8) | payload[9];
+  const height = (payload[10] << 8) | payload[11];
+  const rawImageLen = readU32be(payload, 12);
+
+  const blockSize = payload[16];
+  const paletteSize = payload[17];
+  const bitsPerPixel = payload[18];
+  const saltLen = payload[19];
+  const ivLen = payload[20];
+
+  const expectedBpp = {
+    [FORMAT_1BIT]: 1,
+    [FORMAT_INDEXED8]: 3,
+    [FORMAT_INDEXED16]: 4,
+    [FORMAT_GRAY4]: 2,
+    [FORMAT_GRAY16]: 4,
+    [FORMAT_VQ4]: 12,
+    [FORMAT_WEBP_COLOR]: 8,
+    [FORMAT_WEBP_GRAY]: 8,
+    [FORMAT_NONE]: 0
+  };
+  if (!(format in expectedBpp)) throw new Error('Unsupported image format. It may need a newer version of this page.');
+  if (bitsPerPixel !== expectedBpp[format]) throw new Error('Invalid payload: bits per pixel does not match format.');
+
+  if (encrypted && !password) {
+    throw new Error('This QR is encrypted. Enter the password used during encoding.');
+  }
+
+  let o = 21;
+  const scanlineTransform = version >= 2 ? payload[o++] : SCANLINE_RAW;
+  const shapeByte = version >= 3 ? payload[o++] : SHAPE_RECT;
+  const shapeMask = shapeByte & 0x3f;
+  const hasMemo = (shapeByte & SHAPE_BYTE_HAS_MEMO) !== 0;
+  const memoHd = hasMemo && (shapeByte & SHAPE_BYTE_MEMO_HD) !== 0;
+  // Older QRs (before v4) carry no enhancement hint and are shown as sharp pixels.
+  const enhance = version >= 4 ? payload[o++] : ENHANCE_NONE;
+  const enhanceStrength = version >= 4 ? payload[o++] : 0;
+
+  const salt = payload.slice(o, o + saltLen);
+  o += saltLen;
+
+  const iv = payload.slice(o, o + ivLen);
+  o += ivLen;
+
+  const palette = [];
+
+  for (let i = 0; i < paletteSize; i++) {
+    palette.push([payload[o], payload[o + 1], payload[o + 2]]);
+    o += 3;
+  }
+
+  let protectedStored = payload.slice(o);
+  let protectedPlain;
+
+  if (encrypted) {
+    try {
+      protectedPlain = await decryptBytes(protectedStored, password, salt, iv);
+    } catch {
+      throw new Error('Wrong password or encrypted data is corrupted.');
+    }
+  } else {
+    protectedPlain = protectedStored;
+  }
+
+  const parsed = parseProtectedBlob(protectedPlain, version >= 5, version >= 6);
+  let imageBytes = parsed.imageBytes;
+
+  if (compression === COMPRESSION_RLE) {
+    imageBytes = rleDecompress(imageBytes, rawImageLen);
+  } else if (compression !== COMPRESSION_RAW) {
+    throw new Error('Unsupported compression.');
+  }
+
+  if (imageBytes.length !== rawImageLen) {
+    throw new Error('Image byte length mismatch.');
+  }
+
+  imageBytes = restoreScanlineTransform(format, imageBytes, width, height, bitsPerPixel, scanlineTransform);
+
+  if (format === FORMAT_NONE) {
+    return {
+      format: 'none', noImage: true, width: 0, height: 0, 
+      caption: parsed.caption, description: parsed.description, footer: parsed.footer,
+      compression: 'raw', scanlineTransform, shapeMask, hasMemo, memoHd,
+      enhance: ENHANCE_NONE, enhanceStrength: 0, encrypted, bitsPerPixel: 0,
+      formatName: formatDisplayName(format, paletteSize)
+    };
+  }
+
+  if (format === 1) {
+    const bits = shapeMask === SHAPE_CIRCLE ? expandCircleBits(imageBytes, width, height) : imageBytes;
+    return {
+      format: '1bit',
+      width,
+      height,
+      bits,
+      caption: parsed.caption,
+      description: parsed.description,
+      footer: parsed.footer,
+      compression: compression === COMPRESSION_RLE ? 'RLE' : 'raw',
+      scanlineTransform,
+      shapeMask,
+      hasMemo,
+      memoHd,
+      enhance,
+      enhanceStrength,
+      encrypted
+    };
+  }
+
+  const common = {
+    width,
+    height,
+    caption: parsed.caption,
+    description: parsed.description,
+    footer: parsed.footer,
+    compression: compression === COMPRESSION_RLE ? 'RLE' : 'raw',
+    scanlineTransform,
+    shapeMask,
+    hasMemo,
+    memoHd,
+    enhance,
+    enhanceStrength,
+    encrypted,
+    bitsPerPixel,
+    formatName: formatDisplayName(format, paletteSize)
+  };
+
+  if (format === FORMAT_WEBP_COLOR || format === FORMAT_WEBP_GRAY) {
+    let decoded;
+    try {
+      decoded = await decodeImageBytes(imageBytes, 'image/webp');
+    } catch {
+      throw new Error('This browser could not decode the WebP image stored in the QR.');
+    }
+    if (shapeMask === SHAPE_CIRCLE) decoded = blackOutsideCircle(decoded);
+    return { ...common, width: decoded.width, height: decoded.height, format: 'webp', blockSize: 0, webpQuality: blockSize, imageData: decoded };
+  }
+
+  if (format === FORMAT_VQ4) {
+    const circle = shapeMask === SHAPE_CIRCLE;
+    const bw = Math.ceil(width / VQ_BLOCK);
+    const bh = Math.ceil(height / VQ_BLOCK);
+    const stored = unpackIndexes(imageBytes, countVqStoredBlocks(bw, bh, width, height, circle), 12);
+    const codes = expandVqCodes(stored, bw, bh, width, height, circle);
+    return { ...common, format: 'vq4', blockSize: 0, grayPixels: vqRender(codes, bw, width, height, circle) };
+  }
+
+  let indexes;
+  if (shapeMask === SHAPE_CIRCLE) {
+    const compactIndexes = unpackIndexes(imageBytes, countCirclePixels(width, height), bitsPerPixel);
+    indexes = expandCircleIndexes(compactIndexes, width, height, 0);
+  } else {
+    indexes = unpackIndexes(imageBytes, width * height, bitsPerPixel);
+  }
+
+  const grayLevels = grayLevelsForFormat(format);
+  if (grayLevels) {
+    return { ...common, format: grayLevels === 4 ? 'gray4' : 'gray16', palette: grayPalette(grayLevels), indexes, blockSize: 0 };
+  }
+
+  return {
+    ...common,
+    format: format === 8 ? 'indexed8' : 'indexed16',
+    width,
+    height,
+    palette,
+    indexes,
+    caption: parsed.caption,
+    blockSize,
+    paletteSize,
+    bitsPerPixel,
+    compression: compression === COMPRESSION_RLE ? 'RLE' : 'raw',
+    scanlineTransform,
+    shapeMask,
+    encrypted
+  };
+}
+
+const VQ_SHAPES = buildVqShapes();
+
+/* ---------- QR drawing (same code as the encoder, used to rebuild the card) ---------- */
+function applyQrOutputSize() { /* the scanner has no print-size setting */ }
+
+function concatBytes(...parts) {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+function bytesToQrString(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+
+function makeQrMatrix(content, ecc) {
+  const qr = qrcode(40, ecc);
+  const segments = typeof content === 'string' ? [{ data: content, mode: 'Byte' }] : content;
+  for (const s of segments) qr.addData(s.data, s.mode);
+  qr.make();
+  return qr;
+}
+
+function drawQr(text, ecc, canvas, memoLayers = null) {
+  const qr = makeQrMatrix(text, ecc);
+  const qrR = memoLayers ? makeQrMatrix(bytesToQrString(memoLayers[0]), ecc) : null;
+  const qrB = memoLayers ? makeQrMatrix(bytesToQrString(memoLayers[1]), ecc) : null;
+
+  const modules = qr.getModuleCount();
+  const quiet = 4;
+  const totalModules = modules + quiet * 2;
+  const pixelsPerModule = 4;
+
+  canvas.width = totalModules * pixelsPerModule;
+  canvas.height = totalModules * pixelsPerModule;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#000';
+
+  for (let y = 0; y < modules; y++) {
+    for (let x = 0; x < modules; x++) {
+      if (qrR) {
+        // Dark square in a layer = that channel off. Green = image, red/blue = memo.
+        const r = qrR.isDark(y, x) ? 0 : 255;
+        const g = qr.isDark(y, x) ? 0 : 255;
+        const b = qrB.isDark(y, x) ? 0 : 255;
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect((x + quiet) * pixelsPerModule, (y + quiet) * pixelsPerModule, pixelsPerModule, pixelsPerModule);
+      } else if (qr.isDark(y, x)) {
+        ctx.fillRect(
+          (x + quiet) * pixelsPerModule,
+          (y + quiet) * pixelsPerModule,
+          pixelsPerModule,
+          pixelsPerModule
+        );
+      }
+    }
+  }
+
+  applyQrOutputSize(canvas);
+}
+
+/* ---------- Card ----------
+  A single landscape PNG in a futuristic royal-blue style: blue gradient body with a
+  fine grid, black glass panels, softly glowing text, the caption as the title, the
+  image stored in the QR (exactly as decoders show it), an optional description and
+  the QR on a white plate at exactly 2 px per square.
+  Layout is written in "design units" (1400 x 880) and drawn at CARD_SCALE, so the
+  PNG is 700 x 440 px. Text sizes are chosen to stay readable at that size.
+*/
+const CARD_W = 1400;
+const CARD_H = 880;
+const CARD_SCALE = 0.5;
+const CS = CARD_SCALE; // shadows are in device pixels, so glow sizes are multiplied by CS
+const CARD_FONTS = {
+  title: '"Orbitron", "Eurostile", "Bank Gothic", "Segoe UI", system-ui, sans-serif',
+  body: '"Rajdhani", "Segoe UI", system-ui, sans-serif',
+  link: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+};
+// Shown under the QR unless the code carries its own decoder link.
+const CARD_DEFAULT_LINK = 'https://daragon.tech/go/qrscanv1';
+const CARD_GLOW = 'rgba(110, 190, 255, 0.95)';
+const CARD_TEXT = '#eef6ff';
+const CARD_ACCENT = '#8fd3ff';
+
+let cardFontsReady = null;
+// TriLayerQR logo (transparent WebP, 320 x 106), drawn at the top left of the card.
+const CARD_LOGO_SRC = 'data:image/webp;base64,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';
+let cardLogoReady = null;
+function ensureCardLogo() {
+  if (!cardLogoReady) {
+    cardLogoReady = new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null); // card still renders without it
+      img.src = CARD_LOGO_SRC;
+    });
+  }
+  return cardLogoReady;
+}
+
+function ensureCardFonts() {
+  if (!cardFontsReady) {
+    const loads = ['700 44px "Orbitron"', '600 16px "Orbitron"', '500 26px "Rajdhani"', '600 18px "Rajdhani"']
+      .map(f => (document.fonts ? document.fonts.load(f).catch(() => {}) : Promise.resolve()));
+    // Fonts come from Google Fonts; if they are slow or offline, system fonts are used.
+    cardFontsReady = Promise.race([Promise.all(loads), new Promise(r => setTimeout(r, 2500))]);
+  }
+  return cardFontsReady;
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function fitFontSize(ctx, text, maxWidth, startPx, minPx, fontFor) {
+  let px = startPx;
+  for (; px > minPx; px -= 1) {
+    ctx.font = fontFor(px);
+    if (ctx.measureText(text).width <= maxWidth) return px;
+  }
+  ctx.font = fontFor(minPx);
+  return minPx;
+}
+
+function ellipsize(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+  return t.trimEnd() + '…';
+}
+
+function wrapLines(ctx, text, maxWidth) {
+  const lines = [];
+  for (const para of text.split(/\r?\n/)) {
+    let line = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width <= maxWidth || !line) line = test;
+      else { lines.push(line); line = word; }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+// Glowing text: a soft blue halo under crisp near-white letters, so it stays readable.
+function glowText(ctx, text, x, y, { glow = 14, color = CARD_TEXT, halo = CARD_GLOW } = {}) {
+  ctx.save();
+  ctx.shadowColor = halo;
+  ctx.shadowBlur = glow * CS;
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+  ctx.shadowBlur = (glow / 3) * CS;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+function glassPanel(ctx, x, y, w, h, r = 18, alpha = 0.34) {
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.fillStyle = `rgba(2, 6, 28, ${alpha})`;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(143, 211, 255, 0.35)';
+  ctx.stroke();
+  // top highlight
+  ctx.save();
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.clip();
+  const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+  hl.addColorStop(0, 'rgba(255, 255, 255, 0.07)');
+  hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = hl;
+  ctx.fillRect(x, y, w, h * 0.5);
+  ctx.restore();
+}
+
+// HUD-style corner brackets around a rectangle.
+function cornerBrackets(ctx, x, y, w, h, len, color, width = 2.5) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.shadowColor = CARD_GLOW;
+  ctx.shadowBlur = 8 * CS;
+  ctx.lineCap = 'round';
+  const seg = (x1, y1, x2, y2, x3, y3) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.stroke(); };
+  seg(x, y + len, x, y, x + len, y);
+  seg(x + w - len, y, x + w, y, x + w, y + len);
+  seg(x, y + h - len, x, y + h, x + len, y + h);
+  seg(x + w - len, y + h, x + w, y + h, x + w, y + h - len);
+  ctx.restore();
+}
+
+function drawCardBackground(ctx) {
+  roundRectPath(ctx, 0, 0, CARD_W, CARD_H, 34);
+  const bg = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+  bg.addColorStop(0, '#0a1b78');
+  bg.addColorStop(0.5, '#2150e0');
+  bg.addColorStop(1, '#081460');
+  ctx.fillStyle = bg;
+  ctx.fill();
+
+  ctx.save();
+  roundRectPath(ctx, 0, 0, CARD_W, CARD_H, 34);
+  ctx.clip();
+
+  // Light bloom behind the picture
+  const bloom = ctx.createRadialGradient(300, 380, 20, 300, 380, 620);
+  bloom.addColorStop(0, 'rgba(120, 180, 255, 0.35)');
+  bloom.addColorStop(1, 'rgba(120, 180, 255, 0)');
+  ctx.fillStyle = bloom;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+  // Fine grid
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+  for (let x = 0.5; x < CARD_W; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CARD_H); ctx.stroke(); }
+  for (let y = 0.5; y < CARD_H; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CARD_W, y); ctx.stroke(); }
+
+  // Diagonal light streaks
+  const streak = (x0, width, a) => {
+    const g = ctx.createLinearGradient(x0, 0, x0 + width, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.5, `rgba(180,220,255,${a})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save();
+    ctx.transform(1, 0, -0.45, 1, 0, 0);
+    ctx.fillStyle = g;
+    ctx.fillRect(x0, 0, width, CARD_H);
+    ctx.restore();
+  };
+  streak(420, 160, 0.10);
+  streak(620, 50, 0.08);
+
+  // Dark wash at the edges (black transparent overlay)
+  const vig = ctx.createRadialGradient(CARD_W / 2, CARD_H / 2, CARD_H * 0.35, CARD_W / 2, CARD_H / 2, CARD_W * 0.72);
+  vig.addColorStop(0, 'rgba(0, 0, 10, 0)');
+  vig.addColorStop(1, 'rgba(0, 0, 10, 0.55)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  ctx.restore();
+
+  // Thin glowing edge + HUD corners
+  ctx.save();
+  roundRectPath(ctx, 10, 10, CARD_W - 20, CARD_H - 20, 26);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(143, 211, 255, 0.45)';
+  ctx.shadowColor = CARD_GLOW;
+  ctx.shadowBlur = 10 * CS;
+  ctx.stroke();
+  ctx.restore();
+  cornerBrackets(ctx, 20, 20, CARD_W - 40, CARD_H - 40, 46, 'rgba(210, 238, 255, 0.9)', 3);
+}
+
+function drawTitle(ctx, x, y, w, h, title) {
+  glassPanel(ctx, x, y, w, h, 16, 0.38);
+  // accent bar
+  ctx.save();
+  ctx.fillStyle = CARD_ACCENT;
+  ctx.shadowColor = CARD_GLOW;
+  ctx.shadowBlur = 12 * CS;
+  roundRectPath(ctx, x + 14, y + 16, 4, h - 32, 2);
+  ctx.fill();
+  ctx.restore();
+
+  const maxW = w - 60;
+  const font = s => `700 ${s}px ${CARD_FONTS.title}`;
+  let lines = [title.toUpperCase()];
+  let px = fitFontSize(ctx, lines[0], maxW, 46, 32, font);
+  ctx.font = font(px);
+  if (ctx.measureText(lines[0]).width > maxW) {
+    for (px = 34; px >= 24; px -= 1) {
+      ctx.font = font(px);
+      lines = wrapLines(ctx, title.toUpperCase(), maxW);
+      if (lines.length <= 2 && lines.every(l => ctx.measureText(l).width <= maxW)) break;
+    }
+    if (lines.length > 2) lines = [lines[0], ellipsize(ctx, lines.slice(1).join(' '), maxW)];
+  }
+  ctx.font = font(px);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const lineH = px * 1.2;
+  const top = y + h / 2 - ((lines.length - 1) * lineH) / 2 + 1;
+  lines.forEach((line, i) => glowText(ctx, line, x + 34, top + i * lineH, { glow: 16 }));
+}
+
+function drawAvatar(ctx, image, cx, cy, size, circle) {
+  const r = size / 2;
+  // Dark glass disc/square behind, glowing outline, HUD details
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 15, 0.6)';
+  ctx.shadowBlur = 34 * CS;
+  ctx.shadowOffsetY = 10 * CS;
+  if (circle) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); }
+  else roundRectPath(ctx, cx - r, cy - r, size, size, 22);
+  ctx.fillStyle = 'rgba(2, 6, 28, 0.6)';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  if (circle) { ctx.beginPath(); ctx.arc(cx, cy, r - 8, 0, Math.PI * 2); }
+  else roundRectPath(ctx, cx - r + 8, cy - r + 8, size - 16, size - 16, 16);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, cx - r + 8, cy - r + 8, size - 16, size - 16);
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowColor = CARD_GLOW;
+  ctx.shadowBlur = 16 * CS;
+  ctx.strokeStyle = 'rgba(190, 228, 255, 0.95)';
+  ctx.lineWidth = 3;
+  if (circle) {
+    ctx.beginPath(); ctx.arc(cx, cy, r - 8, 0, Math.PI * 2); ctx.stroke();
+    // outer HUD arcs
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = 'rgba(143, 211, 255, 0.8)';
+    for (const [a0, a1] of [[-0.95, -0.55], [-0.45, -0.3], [0.55, 0.95], [1.05, 1.2]]) {
+      ctx.beginPath(); ctx.arc(cx, cy, r + 12, a0 * Math.PI, a1 * Math.PI); ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(143, 211, 255, 0.35)';
+    ctx.beginPath(); ctx.arc(cx, cy, r + 22, 0, Math.PI * 2); ctx.stroke();
+  } else {
+    roundRectPath(ctx, cx - r + 8, cy - r + 8, size - 16, size - 16, 16); ctx.stroke();
+  }
+  ctx.restore();
+  if (!circle) cornerBrackets(ctx, cx - r - 10, cy - r - 10, size + 20, size + 20, 30, 'rgba(190, 228, 255, 0.9)');
+}
+
+function drawDescription(ctx, x, y, w, h, text) {
+  glassPanel(ctx, x, y, w, h, 16, 0.4);
+  const padX = 24, padY = 16;
+  let px = 32, lines, lineH;
+  for (; px >= 22; px -= 1) {
+    ctx.font = `500 ${px}px ${CARD_FONTS.body}`;
+    lineH = Math.round(px * 1.25);
+    lines = wrapLines(ctx, text, w - padX * 2);
+    if (lines.length * lineH <= h - padY * 2) break;
+  }
+  const maxLines = Math.max(1, Math.floor((h - padY * 2) / lineH));
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    lines[maxLines - 1] = ellipsize(ctx, lines[maxLines - 1] + '…', w - padX * 2);
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const top = y + h / 2 - (lines.length * lineH) / 2 + lineH / 2;
+  lines.forEach((line, i) => glowText(ctx, line, x + padX, top + i * lineH, { glow: 6, color: '#e2efff', halo: 'rgba(110, 190, 255, 0.55)' }));
+}
+
+function drawQrPlate(ctx, qrCanvasSource, x, y, size, link) {
+  // Glow around a white plate; the QR itself stays pure black on white.
+  ctx.save();
+  ctx.shadowColor = 'rgba(120, 190, 255, 0.85)';
+  ctx.shadowBlur = 30 * CS;
+  roundRectPath(ctx, x, y, size, size, 18);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+
+  // Whole device pixels per QR square (qrCanvas has 4 px per module incl. quiet zone),
+  // drawn without the card scale so every square stays sharp.
+  const modules = Math.round(qrCanvasSource.width / 4);
+  const px = Math.max(1, Math.floor(((size - 12) * CS) / modules));
+  const qrSize = modules * px;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  // Even pixel coordinates: each 2x2 JPEG color block then covers a single square, so
+  // photos re-compressed by messaging apps keep the memo colors much cleaner.
+  const even = v => 2 * Math.floor(v / 2);
+  ctx.drawImage(qrCanvasSource, 0, 0, qrCanvasSource.width, qrCanvasSource.height,
+    even(x * CS + (size * CS - qrSize) / 2), even(y * CS + (size * CS - qrSize) / 2), qrSize, qrSize);
+  ctx.restore();
+
+  cornerBrackets(ctx, x - 12, y - 12, size + 24, size + 24, 34, 'rgba(210, 238, 255, 0.95)', 3);
+
+  // Scanner link under the QR, in a standard sans-serif so it reads exactly as typed
+  // (Orbitron has no real lowercase letters, which makes addresses hard to read).
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.letterSpacing = '0.5px';
+  const label = `Scan me with: ${link}`;
+  fitFontSize(ctx, label, size - 20, 24, 16, s => `500 ${s}px ${CARD_FONTS.link}`);
+  // Plain text, no glow, so the address stays crisp and easy to read.
+  ctx.fillStyle = '#e4f0ff';
+  ctx.fillText(ellipsize(ctx, label, size - 20), x + size / 2, y + size + 34);
+  ctx.restore();
+}
+
+/*
+  opts: { image (canvas), circle, title, description, footer, capacity, qr (canvas) }
+*/
+async function renderCard(canvas, opts) {
+  await ensureCardFonts();
+  const logo = await ensureCardLogo();
+  canvas.width = Math.round(CARD_W * CS);
+  canvas.height = Math.round(CARD_H * CS);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(CS, 0, 0, CS, 0, 0);
+  ctx.clearRect(0, 0, CARD_W, CARD_H);
+  drawCardBackground(ctx);
+
+  // Right: QR plate, 185 squares x 4 px + small margin
+  const plate = 752;
+  const qrX = CARD_W - 60 - plate, qrY = 40;
+  drawQrPlate(ctx, opts.qr, qrX, qrY, plate, opts.link || CARD_DEFAULT_LINK);
+
+  // Left column
+  const colX = 60, colW = qrX - 56 - colX;
+  const hasDesc = !!(opts.description && opts.description.trim());
+
+  // Title, picture and description sit higher, leaving room for the logo below them.
+  drawTitle(ctx, colX, 40, colW, 84, opts.title);
+
+  // Cards without a picture give its space to the description (or to a larger logo).
+  const bigLogo = !opts.image && !hasDesc;
+  if (opts.image) {
+    const avatarSize = Math.min(colW - 70, hasDesc ? 320 : 400);
+    const avatarCy = hasDesc ? 150 + avatarSize / 2 : 150 + avatarSize / 2 + 16;
+    drawAvatar(ctx, opts.image, colX + colW / 2, avatarCy, avatarSize, opts.circle);
+    if (hasDesc) drawDescription(ctx, colX, 494, colW, 170, opts.description.trim());
+  } else if (hasDesc) {
+    drawDescription(ctx, colX, 150, colW, 514, opts.description.trim());
+  }
+
+  // TriLayerQR logo, just above the usage meter so the two read as one block
+  // (large and centered in the column when the card has neither picture nor description)
+  if (logo) {
+    const logoH = bigLogo ? 150 : 86, logoW = logoH * logo.naturalWidth / logo.naturalHeight;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(logo, Math.round(colX + (colW - logoW) / 2), bigLogo ? 330 : 674, logoW, logoH);
+    ctx.restore();
+  }
+
+  // Capacity: small bar, then total data stored and how much of the QR is used / free
+  const { usedBytes, totalBytes } = opts.capacity;
+  const usedPct = Math.max(0, Math.min(100, Math.round(usedBytes / totalBytes * 100)));
+  const barX = colX + 4, barY = 766, barW = 128, barH = 12;
+  roundRectPath(ctx, barX, barY, barW, barH, barH / 2);
+  ctx.fillStyle = 'rgba(2, 6, 28, 0.55)';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(143, 211, 255, 0.45)';
+  ctx.stroke();
+  if (usedPct > 0) {
+    ctx.save();
+    roundRectPath(ctx, barX, barY, barW, barH, barH / 2);
+    ctx.clip();
+    const fill = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    fill.addColorStop(0, '#5fb8ff');
+    fill.addColorStop(1, '#d6f0ff');
+    ctx.shadowColor = CARD_GLOW;
+    ctx.shadowBlur = 10 * CS;
+    ctx.fillStyle = fill;
+    ctx.fillRect(barX, barY, barW * usedPct / 100, barH);
+    ctx.restore();
+  }
+  const capText = `${(usedBytes / 1024).toFixed(1)} KB  ·  ${usedPct}% USED  ·  ${100 - usedPct}% FREE`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const textX = barX + barW + 16;
+  fitFontSize(ctx, capText, colX + colW - textX, 24, 16, s => `600 ${s}px ${CARD_FONTS.body}`);
+  ctx.save();
+  ctx.letterSpacing = '1px';
+  glowText(ctx, capText, textX, barY + barH / 2 + 1, { glow: 8, color: CARD_ACCENT });
+  ctx.restore();
+
+  // User footer (left bottom); nothing is drawn when it is empty
+  const footer = (opts.footer || '').trim();
+  if (footer) {
+    ctx.strokeStyle = 'rgba(143, 211, 255, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(colX + 4, 804); ctx.lineTo(colX + colW, 804); ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    fitFontSize(ctx, footer, colW - 8, 24, 18, s => `600 ${s}px ${CARD_FONTS.body}`);
+    ctx.save();
+    ctx.letterSpacing = '1px';
+    glowText(ctx, ellipsize(ctx, footer.replace(/\s+/g, ' '), colW - 8), colX + 4, 830, { glow: 8, color: '#dcebff' });
+    ctx.restore();
+  }
+}
+
+
+/*
+  Back of the card, drawn at full design resolution (1400 x 880) so pictures stay sharp.
+  It is only shown on screen (flip), never part of the downloaded card.
+  image: the sharper picture, the back image, or the basic picture.
+  opts: { circle } – show as a large circle; { memo } – leave the right half for the
+  memo text, which the page lays over it as scrollable HTML (#cardBackMemo).
+*/
+async function renderCardBack(canvas, image, opts = {}) {
+  const logo = await ensureCardLogo();
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, CARD_W, CARD_H);
+  drawCardBackground(ctx);
+
+  // Picture area: the whole card, or the left half when the memo sits on the right.
+  const area = opts.memo ? { cx: 360, cy: 396, w: 560, h: 610, circle: 540 } : { cx: CARD_W / 2, cy: 400, w: 1200, h: 690, circle: 690 };
+  if (!image) {
+    // No picture: the memo panel takes the width of the card.
+  } else if (opts.circle) {
+    drawAvatar(ctx, image, area.cx, area.cy + (opts.memo ? 0 : 12), area.circle, true);
+  } else {
+    const iw = image.naturalWidth || image.width, ih = image.naturalHeight || image.height;
+    const k = Math.min(area.w / iw, area.h / ih);
+    const w = Math.round(iw * k), h = Math.round(ih * k);
+    const x = Math.round(area.cx - w / 2), y = Math.round(area.cy - h / 2);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 15, 0.6)';
+    ctx.shadowBlur = 34;
+    ctx.shadowOffsetY = 10;
+    roundRectPath(ctx, x - 10, y - 10, w + 20, h + 20, 24);
+    ctx.fillStyle = 'rgba(2, 6, 28, 0.6)';
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    roundRectPath(ctx, x, y, w, h, 16);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, x, y, w, h);
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = CARD_GLOW;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = 'rgba(190, 228, 255, 0.95)';
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, x, y, w, h, 16);
+    ctx.stroke();
+    ctx.restore();
+    cornerBrackets(ctx, x - 22, y - 22, w + 44, h + 44, 34, 'rgba(210, 238, 255, 0.95)', 3);
+  }
+
+  if (logo) {
+    const logoH = 58, logoW = logoH * logo.naturalWidth / logo.naturalHeight;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(logo, Math.round((image ? area.cx : CARD_W / 2) - logoW / 2), 800, logoW, logoH);
+    ctx.restore();
+  }
+}
+
+/*
+  Sets up the back of the card and the flip button. The back exists when there is a
+  picture from the color layers or a memo: picture (or the basic picture) on the left,
+  memo text on the right in a translucent, scrollable panel.
+*/
+async function updateCardBack({ picture = null, circle = false, memoText = '', fallback = null }) {
+  const text = (memoText || '').trim();
+  const image = picture || (text ? fallback : null);
+  const has = !!(image || text);
+  if (has) await renderCardBack(document.getElementById('cardBackCanvas'), image, { circle, memo: !!text && !!image });
+  const box = document.getElementById('cardBackMemo');
+  box.hidden = !text;
+  box.classList.toggle('full', !image);
+  const body = document.getElementById('cardBackMemoText');
+  body.textContent = text;
+  body.scrollTop = 0;
+  const stage = document.getElementById('cardFlip');
+  stage.classList.toggle('has-back', has);
+  setCardFlip(stage, document.getElementById('flipCardBtn'), has);
+}
+
+// Flip between the card (front) and its HD back. stage: element holding .card-flip.
+function setCardFlip(stage, button, hasBack) {
+  button.hidden = !hasBack;
+  if (!hasBack) stage.classList.remove('flipped');
+  button.textContent = stage.classList.contains('flipped') ? 'Flip to front' : 'Flip card';
+}
+
+function toggleCardFlip(stage, button) {
+  stage.classList.toggle('flipped');
+  button.textContent = stage.classList.contains('flipped') ? 'Flip to front' : 'Flip card';
+}
+
+// Standard byte capacity of one Version-40 QR layer per error-correction level.
+const QR_LAYER_BYTES = { L: 2953, M: 2331, Q: 1663, H: 1273 };
+
+/*
+  Builds the card for a decoded result. Used by the encoder (after encoding) and by
+  the scanner (after decoding), so both produce the same card.
+  extra: { qr (canvas with the QR at 4 px per module), payloadBytes, memoBytes, ecc, decoderUrl }
+  Capacity counts all three TriLayerQR layers: used = image layer + memo data.
+*/
+async function renderCardFromRestored(canvas, restored, extra) {
+  // extra.avatarImage: an HD copy of the picture (from the color layers) replaces the basic one.
+  let image = extra.avatarImage || null;
+  if (!image && !restored.noImage) {
+    image = document.createElement('canvas');
+    drawRestoredBase(restored, image);
+  }
+  const layer = QR_LAYER_BYTES[extra.ecc] || QR_LAYER_BYTES.M;
+  await renderCard(canvas, {
+    image,
+    circle: restored.shapeMask === SHAPE_CIRCLE,
+    title: (restored.caption || '').trim() || 'TriLayerQR',
+    description: (restored.description || '').trim(),
+    // The image layer plus one memo layer (red and blue carry the same data); older
+    // two-memo-layer codes count three.
+    capacity: { usedBytes: extra.payloadBytes + (extra.memoBytes || 0), totalBytes: layer * (1 + Math.max(1, extra.memoLayers || 1)) },
+    footer: (restored.footer || '').trim(),
+    link: (extra.decoderUrl || '').trim() || CARD_DEFAULT_LINK,
+    qr: extra.qr
+  });
+  return image;
+}
+
+/* ---------- Memo: extra text carried in the red and blue channels of a color QR ----------
+  A color QR is three ordinary Version-40 QR codes printed on top of each other:
+    green channel = the image QR (dark square -> green off)
+    red channel   = memo layer 1
+    blue channel  = memo layer 2
+  New codes use one memo layer, repeated in red and blue, so each square is one of only
+  4 colors (black, white, green, magenta): the memo is read from both channels, which is
+  much more reliable. Older codes may carry a second memo layer in blue (8 colors) and
+  are still read. Standard scanners
+  convert to gray, which is dominated by green, so they still read the image QR.
+  Our decoders split the channels and run jsQR on the red and blue layers separately.
+
+  Memo layer bytes:  'IQM1' | part index | part count | chunk
+  Joined chunks (memo blob):  flags (bit0 = deflate-compressed, bit1 = encrypted)
+                               [salt 16 | IV 12 when encrypted] | data
+*/
+const MEMO_MAGIC = [0x49, 0x51, 0x4D, 0x31]; // 'IQM1'
+const MEMO_LAYER_HEADER = 6;
+const MEMO_FLAG_COMPRESSED = 1;
+const MEMO_FLAG_ENCRYPTED = 2;
+const MEMO_FLAG_IMAGE = 4;        // the memo is a picture: [role byte][WebP/JPEG file bytes]
+const MEMO_FLAG_TEXT = 8;         // picture memo that also carries memo text
+const MEMO_IMAGE_HD = 1;          // HD copy of the card's own picture (used on the card)
+const MEMO_IMAGE_BACK = 2;        // a separate picture, shown on the back of the card
+const SHAPE_BYTE_MEMO_HD = 0x40;  // header byte 22: the memo is the HD picture (no text)
+const SHAPE_BYTE_HAS_MEMO = 0x80; // high bit of header byte 22: this QR has memo layers
+
+async function deflateBytes(bytes) {
+  if (typeof CompressionStream === 'undefined') return null;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function inflateBytes(bytes) {
+  if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot decompress the memo. Try a current Chrome, Edge, Firefox or Safari.');
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// One color channel of an RGBA image as a gray RGBA image that jsQR can scan.
+function channelAsGray(imageData, channel) {
+  const src = imageData.data;
+  const out = new Uint8ClampedArray(src.length);
+  for (let i = 0; i < src.length; i += 4) {
+    const v = src[i + channel];
+    out[i] = out[i + 1] = out[i + 2] = v;
+    out[i + 3] = 255;
+  }
+  return out;
+}
+
+function redBlueAsGray(imageData) {
+  const src = imageData.data;
+  const out = new Uint8ClampedArray(src.length);
+  for (let i = 0; i < src.length; i += 4) {
+    out[i] = out[i + 1] = out[i + 2] = (src[i] + src[i + 2]) >> 1;
+    out[i + 3] = 255;
+  }
+  return out;
+}
+
+// Reads whatever memo layers are visible in an image. Returns parts keyed by index.
+async function readMemoLayers(imageData, found = new Map()) {
+  for (const channel of [0, 2, 'rb']) { // red, blue, then both averaged (one-layer memos repeat in both)
+    if (channel === 'rb' && (found.size || !imageData)) break;
+    const layer = new ImageData(channel === 'rb' ? redBlueAsGray(imageData) : channelAsGray(imageData, channel), imageData.width, imageData.height);
+    const res = await scanQr(layer, { invert: false });
+    if (!res || !res.binaryData) continue;
+    const b = Uint8Array.from(res.binaryData);
+    if (b.length < MEMO_LAYER_HEADER || MEMO_MAGIC.some((m, i) => b[i] !== m)) continue;
+    if (!found.has(b[4])) found.set(b[4], b.slice(MEMO_LAYER_HEADER));
+    found.count = b[5];
+  }
+  return found;
+}
+
+/* ---------- Robust memo reading (grid sampling) ----------
+  Used when the direct per-channel scan can't read the memo, typically after JPEG
+  re-compression (WhatsApp, social media) which blurs color much more than brightness.
+  1. The image layer (green) has already been decoded, so we know where the QR is and
+     can regenerate its exact square pattern.
+  2. Map the 177 x 177 grid onto the image (perspective), aligning it against that known
+     pattern, and sample each square's color at its center.
+  3. Classify the red / blue value of each square separately for green-on and green-off
+     squares, with light de-blurring from the neighbours, in local tiles.
+  4. Redraw each memo layer as a clean black-and-white QR and decode it; QR error
+     correction repairs the remaining mistakes. Several settings are tried.
+*/
+
+function solveHomography(src, dst) {
+  // src/dst: 4 points {x,y}; returns 3x3 matrix mapping src -> dst
+  const A = [], bv = [];
+  for (let i = 0; i < 4; i++) {
+    const { x, y } = src[i], { x: u, y: v } = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); bv.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); bv.push(v);
+  }
+  // Gaussian elimination
+  const n = 8;
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]]; [bv[c], bv[piv]] = [bv[piv], bv[c]];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c] / A[c][c];
+      for (let k = c; k < n; k++) A[r][k] -= f * A[c][k];
+      bv[r] -= f * bv[c];
+    }
+  }
+  const h = bv.map((v, i) => v / A[i][i]);
+  return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+}
+
+function applyHomography(H, x, y) {
+  const w = H[6] * x + H[7] * y + H[8];
+  return { x: (H[0] * x + H[1] * y + H[2]) / w, y: (H[3] * x + H[4] * y + H[5]) / w };
+}
+
+function bilinearRGB(img, x, y) {
+  const { width: w, height: h, data } = img;
+  x = Math.max(0, Math.min(w - 1.001, x - 0.5));
+  y = Math.max(0, Math.min(h - 1.001, y - 0.5));
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+  const out = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    const p = (xx, yy) => data[(yy * w + xx) * 4 + c];
+    out[c] = p(x0, y0) * (1 - fx) * (1 - fy) + p(x0 + 1, y0) * fx * (1 - fy) + p(x0, y0 + 1) * (1 - fx) * fy + p(x0 + 1, y0 + 1) * fx * fy;
+  }
+  return out;
+}
+
+// Samples every square of an N x N grid; returns Float32Arrays R, G, B (0..255).
+function sampleGrid(img, H, N, dx, dy) {
+  const R = new Float32Array(N * N), G = new Float32Array(N * N), B = new Float32Array(N * N);
+  const offs = [[0, 0], [-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]];
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      let r = 0, g = 0, b = 0;
+      for (const [ox, oy] of offs) {
+        const p = applyHomography(H, i + 0.5 + dx + ox, j + 0.5 + dy + oy);
+        const c = bilinearRGB(img, p.x, p.y);
+        r += c[0]; g += c[1]; b += c[2];
+      }
+      const k = j * N + i;
+      R[k] = r / offs.length; G[k] = g / offs.length; B[k] = b / offs.length;
+    }
+  }
+  return { R, G, B };
+}
+
+function twoMeansThreshold(values) {
+  if (!values.length) return 128;
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  let t = (lo + hi) / 2;
+  for (let it = 0; it < 12; it++) {
+    let s0 = 0, n0 = 0, s1 = 0, n1 = 0;
+    for (const v of values) { if (v < t) { s0 += v; n0++; } else { s1 += v; n1++; } }
+    if (!n0 || !n1) break;
+    const nt = (s0 / n0 + s1 / n1) / 2;
+    if (Math.abs(nt - t) < 0.01) break;
+    t = nt;
+  }
+  return t;
+}
+
+// Channel values -> dark/light bits, per green group, in local tiles, with de-blurring.
+function classifyLayer(V, greenDark, N, sharpen, tile) {
+  let W = V;
+  if (sharpen > 0) {
+    W = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        let s = 0, n = 0;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = i + a, y = j + b;
+          if (x >= 0 && y >= 0 && x < N && y < N) { s += V[y * N + x]; n++; }
+        }
+        W[j * N + i] = V[j * N + i] + sharpen * (V[j * N + i] - s / n);
+      }
+    }
+  }
+  const dark = new Uint8Array(N * N);
+  const T = Math.ceil(N / tile);
+  for (let ty = 0; ty < T; ty++) {
+    for (let tx = 0; tx < T; tx++) {
+      // gather a slightly larger window for stable thresholds
+      const x0 = Math.max(0, tx * tile - 4), x1 = Math.min(N, (tx + 1) * tile + 4);
+      const y0 = Math.max(0, ty * tile - 4), y1 = Math.min(N, (ty + 1) * tile + 4);
+      const groups = [[], []];
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) groups[greenDark[y * N + x] ? 1 : 0].push(W[y * N + x]);
+      const th = [twoMeansThreshold(groups[0]), twoMeansThreshold(groups[1])];
+      for (let y = ty * tile; y < Math.min(N, (ty + 1) * tile); y++) {
+        for (let x = tx * tile; x < Math.min(N, (tx + 1) * tile); x++) {
+          const k = y * N + x;
+          dark[k] = W[k] < th[greenDark[k] ? 1 : 0] ? 1 : 0;
+        }
+      }
+    }
+  }
+  return dark;
+}
+
+// Like classifyLayer, but thresholds separately inside each group (group ids 0..3).
+function classifyGrouped(V, group, nGroups, N, sharpen, tile) {
+  let W = V;
+  if (sharpen > 0) {
+    W = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        let s = 0, n = 0;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = i + a, y = j + b;
+          if (x >= 0 && y >= 0 && x < N && y < N) { s += V[y * N + x]; n++; }
+        }
+        W[j * N + i] = V[j * N + i] + sharpen * (V[j * N + i] - s / n);
+      }
+    }
+  }
+  const dark = new Uint8Array(N * N);
+  const T = Math.ceil(N / tile);
+  for (let ty = 0; ty < T; ty++) {
+    for (let tx = 0; tx < T; tx++) {
+      const x0 = Math.max(0, tx * tile - 4), x1 = Math.min(N, (tx + 1) * tile + 4);
+      const y0 = Math.max(0, ty * tile - 4), y1 = Math.min(N, (ty + 1) * tile + 4);
+      const groups = Array.from({ length: nGroups }, () => []);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) groups[group[y * N + x]].push(W[y * N + x]);
+      const th = groups.map(twoMeansThreshold);
+      for (let y = ty * tile; y < Math.min(N, (ty + 1) * tile); y++) {
+        for (let x = tx * tile; x < Math.min(N, (tx + 1) * tile); x++) {
+          const k = y * N + x;
+          dark[k] = W[k] < th[group[k]] ? 1 : 0;
+        }
+      }
+    }
+  }
+  return dark;
+}
+
+function renderModules(dark, N, px = 4, quiet = 4) {
+  const size = (N + quiet * 2) * px;
+  const out = new ImageData(size, size);
+  out.data.fill(255);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      if (!dark[j * N + i]) continue;
+      for (let y = 0; y < px; y++) {
+        const row = ((j + quiet) * px + y) * size;
+        for (let x = 0; x < px; x++) {
+          const o = (row + (i + quiet) * px + x) * 4;
+          out.data[o] = out.data[o + 1] = out.data[o + 2] = 0;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+async function decodeMemoLayerBits(dark, N) {
+  const res = await scanQr(renderModules(dark, N), { invert: false });
+  if (!res || !res.binaryData) return null;
+  const b = Uint8Array.from(res.binaryData);
+  if (b.length < MEMO_LAYER_HEADER || MEMO_MAGIC.some((m, i) => b[i] !== m)) return null;
+  return b;
+}
+
+/*
+  imageData: the photo/screenshot; position: ZXing corner quad of the image-layer QR;
+  greenQrs: qrcode-generator matrix (or several candidates) of the decoded image layer.
+  found: Map of memo parts (filled in place). quick: fewer settings (camera frames).
+  Returns found.
+*/
+async function readMemoLayersByGrid(imageData, position, greenQrs, found = new Map(), { quick = false } = {}) {
+  greenQrs = Array.isArray(greenQrs) ? greenQrs : [greenQrs];
+  const N = greenQrs[0].getModuleCount();
+  const patterns = greenQrs.map(q => {
+    const d = new Uint8Array(N * N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) d[j * N + i] = q.isDark(j, i) ? 1 : 0;
+    return d;
+  });
+
+  // Two readings of ZXing's corners: symbol edges, or centers of the corner squares.
+  const P = position;
+  const quad = [P.topLeft, P.topRight, P.bottomRight, P.bottomLeft];
+  const hypotheses = [
+    solveHomography([{ x: 0, y: 0 }, { x: N, y: 0 }, { x: N, y: N }, { x: 0, y: N }], quad),
+    solveHomography([{ x: 0.5, y: 0.5 }, { x: N - 0.5, y: 0.5 }, { x: N - 0.5, y: N - 0.5 }, { x: 0.5, y: N - 0.5 }], quad)
+  ];
+
+  // Align the grid: pick the mapping/offset whose green samples best match the known pattern.
+  let best = null;
+  for (const H of hypotheses) {
+    for (let dy = -0.4; dy <= 0.41; dy += 0.2) {
+      for (let dx = -0.4; dx <= 0.41; dx += 0.2) {
+        const s = sampleGrid(imageData, H, N, dx, dy);
+        const th = twoMeansThreshold(Array.from(s.G));
+        for (const pattern of patterns) {
+          let agree = 0;
+          for (let k = 0; k < N * N; k++) if ((s.G[k] < th ? 1 : 0) === pattern[k]) agree++;
+          if (!best || agree > best.agree) best = { agree, s, pattern };
+        }
+      }
+    }
+  }
+  // Grid not found reliably (wrong code, heavy blur): don't waste time decoding noise.
+  if (best.agree < 0.8 * N * N) return found;
+  const greenDark = best.pattern;
+  const { R, G, B } = best.s;
+  const RB = new Float32Array(N * N);
+  // Brightness survives JPEG far better than color. With green known, brightness mostly
+  // reflects red (red weighs ~2.6x more than blue in brightness).
+  const Y = new Float32Array(N * N);
+  for (let k = 0; k < N * N; k++) {
+    RB[k] = (R[k] + B[k]) / 2;
+    Y[k] = 0.299 * R[k] + 0.587 * G[k] + 0.114 * B[k];
+  }
+
+  const keep = b => {
+    if (!b) return false;
+    found.count = b[5];
+    if (!found.has(b[4])) found.set(b[4], b.slice(MEMO_LAYER_HEADER));
+    return true;
+  };
+  const done = () => found.count && memoPartsComplete(found);
+
+  for (const sharpen of quick ? [0.6] : [0.6, 0, 1.2]) {
+    for (const tile of quick ? [22] : [22, 45, N]) {
+      // 1. Color channels directly, grouped by green (works well for one-layer memos).
+      for (const V of [RB, R, B]) {
+        if (done()) return found;
+        keep(await decodeMemoLayerBits(classifyLayer(V, greenDark, N, sharpen, tile), N));
+      }
+      // 2. Red from brightness, then blue within each (green, red) group.
+      if (done()) return found;
+      const redDark = classifyLayer(Y, greenDark, N, sharpen, tile);
+      keep(await decodeMemoLayerBits(redDark, N));
+      const group = new Uint8Array(N * N);
+      for (let k = 0; k < N * N; k++) group[k] = greenDark[k] * 2 + redDark[k];
+      for (const V of [B, Y]) {
+        if (done()) return found;
+        keep(await decodeMemoLayerBits(classifyGrouped(V, group, 4, N, sharpen, tile), N));
+      }
+    }
+  }
+  return found;
+}
+
+// Image-layer QR data -> the segments it was generated from (to regenerate its pattern).
+function greenSegmentsFromScan(res, payload, transport) {
+  if (transport === 'phone-camera link') {
+    const text = res.data;
+    const i = text.indexOf('#');
+    return [{ data: text.slice(0, i + 1), mode: 'Byte' }, { data: text.slice(i + 1).toUpperCase(), mode: 'Alphanumeric' }];
+  }
+  if (transport === 'base64 text') return [{ data: res.data, mode: 'Byte' }];
+  return [{ data: bytesToQrString(payload), mode: 'Byte' }];
+}
+
+// Direct per-channel reading first; grid sampling when that can't find every part.
+async function readMemoFromImage(imageData, res, found = new Map(), options = {}) {
+  await readMemoLayers(imageData, found);
+  if (memoPartsComplete(found) || !res || !res.position || res.launched) return found;
+  try {
+    const { payload, transport } = qrResultToPayload(res);
+    const segments = greenSegmentsFromScan(res, payload, transport);
+    const candidates = [];
+    for (const level of res.ecLevel ? [res.ecLevel] : ['M', 'L', 'Q', 'H']) {
+      try { candidates.push(makeQrMatrix(segments, level)); } catch (e) { /* does not fit this level */ }
+    }
+    if (candidates.length) await readMemoLayersByGrid(imageData, res.position, candidates, found, options);
+  } catch (err) {
+    console.warn('Grid memo reading failed:', err);
+  }
+  return found;
+}
+
+function memoPartsComplete(found) {
+  if (!found || !found.count) return false;
+  for (let i = 0; i < found.count; i++) if (!found.has(i)) return false;
+  return true;
+}
+
+function joinMemoParts(found) {
+  const chunks = [];
+  for (let i = 0; i < found.count; i++) chunks.push(found.get(i));
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+
+// Returns { type: 'text', text } or { type: 'image', role, bytes, mime }.
+async function decodeMemoPayload(blob, password) {
+  const flags = blob[0];
+  let data = blob.slice(1);
+  if (flags & MEMO_FLAG_ENCRYPTED) {
+    if (!password) throw new Error('The memo is encrypted. Enter the password.');
+    try {
+      data = await decryptBytes(data.slice(28), password, data.slice(0, 16), data.slice(16, 28));
+    } catch {
+      throw new Error('Wrong password for the memo, or the memo layer is damaged.');
+    }
+  }
+  if (flags & MEMO_FLAG_IMAGE) {
+    // [role][text length u32][text][image] when MEMO_FLAG_TEXT is set, else [role][image]
+    let o = 1, text = '';
+    if (flags & MEMO_FLAG_TEXT) {
+      const len = readU32be(data, 1);
+      let t = data.slice(5, 5 + len);
+      if (flags & MEMO_FLAG_COMPRESSED) t = await inflateBytes(t);
+      text = new TextDecoder().decode(t);
+      o = 5 + len;
+    }
+    let bytes = data.slice(o), gain = 1;
+    if (data[0] === MEMO_IMAGE_DETAIL) { gain = (bytes[0] || 16) / 16; bytes = bytes.slice(1); }
+    const mime = bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg' : bytes[0] === 0x89 ? 'image/png' : 'image/webp';
+    return { type: 'image', role: data[0], bytes, mime, text, gain };
+  }
+  if (flags & MEMO_FLAG_COMPRESSED) data = await inflateBytes(data);
+  return { type: 'text', text: new TextDecoder().decode(data) };
+}
+
+async function decodeMemoBlob(blob, password) {
+  const memo = await decodeMemoPayload(blob, password);
+  if (memo.type !== 'text') throw new Error('This memo is a picture, not text.');
+  return memo.text;
+}
+
+/* ---------- Detail layer ----------
+  With no memo (or a short one), the free memo space stores the fine detail the basic
+  picture is missing: the difference between the real picture at a larger size and the
+  basic picture enlarged. Decoders enlarge the basic picture the same way (bicubic, in
+  plain JavaScript so every browser gets identical pixels) and add the detail back.
+  Body: [role 3][gain x16][WebP of (detail + 128)].
+*/
+const MEMO_IMAGE_DETAIL = 3;
+
+function bicubicResize(src, W, H) {
+  const { width: w, height: h, data: s } = src;
+  const out = new ImageData(W, H);
+  const d = out.data;
+  const cub = t => {
+    const a = Math.abs(t);
+    return a <= 1 ? 1.5 * a * a * a - 2.5 * a * a + 1 : a < 2 ? -0.5 * a * a * a + 2.5 * a * a - 4 * a + 2 : 0;
+  };
+  const taps = (n, N) => { // for each output index: 4 source indexes and weights
+    const idx = new Int32Array(N * 4), wt = new Float32Array(N * 4);
+    for (let o = 0; o < N; o++) {
+      const x = (o + 0.5) * n / N - 0.5, x0 = Math.floor(x);
+      for (let k = 0; k < 4; k++) {
+        const xi = x0 - 1 + k;
+        idx[o * 4 + k] = Math.min(n - 1, Math.max(0, xi));
+        wt[o * 4 + k] = cub(x - xi);
+      }
+    }
+    return { idx, wt };
+  };
+  const tx = taps(w, W), ty = taps(h, H);
+  const tmp = new Float32Array(W * h * 3);
+  for (let y = 0; y < h; y++) {
+    for (let X = 0; X < W; X++) {
+      let r = 0, g = 0, b = 0;
+      for (let k = 0; k < 4; k++) {
+        const i = (y * w + tx.idx[X * 4 + k]) * 4, wk = tx.wt[X * 4 + k];
+        r += s[i] * wk; g += s[i + 1] * wk; b += s[i + 2] * wk;
+      }
+      const o = (y * W + X) * 3;
+      tmp[o] = r; tmp[o + 1] = g; tmp[o + 2] = b;
+    }
+  }
+  for (let Y = 0; Y < H; Y++) {
+    for (let X = 0; X < W; X++) {
+      let r = 0, g = 0, b = 0;
+      for (let k = 0; k < 4; k++) {
+        const o = (ty.idx[Y * 4 + k] * W + X) * 3, wk = ty.wt[Y * 4 + k];
+        r += tmp[o] * wk; g += tmp[o + 1] * wk; b += tmp[o + 2] * wk;
+      }
+      const i = (Y * W + X) * 4;
+      d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255; // Uint8ClampedArray rounds and clamps
+    }
+  }
+  return out;
+}
+
+// basic: the decoded basic picture; detail: decoded detail image. Returns ImageData.
+function applyDetail(basic, detail, gain = 1) {
+  const up = bicubicResize(basic, detail.width, detail.height);
+  const u = up.data, r = detail.data;
+  for (let i = 0; i < u.length; i += 4) {
+    u[i] = u[i] + (r[i] - 128) * gain;
+    u[i + 1] = u[i + 1] + (r[i + 1] - 128) * gain;
+    u[i + 2] = u[i + 2] + (r[i + 2] - 128) * gain;
+  }
+  return up;
+}
+
+function imageDataToCanvas(imageData) {
+  const c = document.createElement('canvas');
+  c.width = imageData.width;
+  c.height = imageData.height;
+  c.getContext('2d').putImageData(imageData, 0, 0);
+  return c;
+}
+
+// Sharper picture for a decoded card: basic picture + detail layer (a canvas), or null.
+async function detailPictureCanvas(restored, memo) {
+  if (!restored || !restored.imageData) return null; // detail layers exist for WebP pictures only
+  const detail = await decodeImageBytes(memo.bytes, memo.mime);
+  return imageDataToCanvas(applyDetail(restored.imageData, detail, memo.gain || 1));
+}
+
+// Decoded picture memo -> an image element that can be drawn on a canvas.
+async function memoImageElement(memo) {
+  const url = URL.createObjectURL(new Blob([memo.bytes], { type: memo.mime }));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+/* ---------- Caption drawn onto the restored image (decoder-side only, costs no QR bytes) ----------
+  An original 5-px-wide bitmap font. Each glyph is 7 rows (capitals, digits, most
+  punctuation) or 9 rows (the extra 2 rows hold descenders for g, j, p, q, y, comma).
+  Glyphs are drawn proportionally: blank side columns are trimmed, 1 px between letters.
+  Accented letters are built from the base letter plus an accent drawn above (or a
+  cedilla below), so á é í ó ú à â ê ô ã õ ç ü and capitals all render.
+*/
+const PIXEL_FONT_DATA = [
+  ['A', '.###. #...# #...# ##### #...# #...# #...#'],
+  ['B', '####. #...# #...# ####. #...# #...# ####.'],
+  ['C', '.###. #...# #.... #.... #.... #...# .###.'],
+  ['D', '####. #...# #...# #...# #...# #...# ####.'],
+  ['E', '##### #.... #.... ####. #.... #.... #####'],
+  ['F', '##### #.... #.... ####. #.... #.... #....'],
+  ['G', '.###. #...# #.... #.### #...# #...# .####'],
+  ['H', '#...# #...# #...# ##### #...# #...# #...#'],
+  ['I', '.###. ..#.. ..#.. ..#.. ..#.. ..#.. .###.'],
+  ['J', '..### ...#. ...#. ...#. ...#. #..#. .##..'],
+  ['K', '#...# #..#. #.#.. ##... #.#.. #..#. #...#'],
+  ['L', '#.... #.... #.... #.... #.... #.... #####'],
+  ['M', '#...# ##.## #.#.# #.#.# #...# #...# #...#'],
+  ['N', '#...# #...# ##..# #.#.# #..## #...# #...#'],
+  ['O', '.###. #...# #...# #...# #...# #...# .###.'],
+  ['P', '####. #...# #...# ####. #.... #.... #....'],
+  ['Q', '.###. #...# #...# #...# #.#.# #..#. .##.#'],
+  ['R', '####. #...# #...# ####. #.#.. #..#. #...#'],
+  ['S', '.#### #.... #.... .###. ....# ....# ####.'],
+  ['T', '##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..'],
+  ['U', '#...# #...# #...# #...# #...# #...# .###.'],
+  ['V', '#...# #...# #...# #...# #...# .#.#. ..#..'],
+  ['W', '#...# #...# #...# #.#.# #.#.# #.#.# .#.#.'],
+  ['X', '#...# #...# .#.#. ..#.. .#.#. #...# #...#'],
+  ['Y', '#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..'],
+  ['Z', '##### ....# ...#. ..#.. .#... #.... #####'],
+  ['a', '..... ..... .###. ....# .#### #...# .####'],
+  ['b', '#.... #.... ####. #...# #...# #...# ####.'],
+  ['c', '..... ..... .###. #.... #.... #...# .###.'],
+  ['d', '....# ....# .#### #...# #...# #...# .####'],
+  ['e', '..... ..... .###. #...# ##### #.... .###.'],
+  ['f', '..##. .#..# .#... ###.. .#... .#... .#...'],
+  ['g', '..... ..... .#### #...# #...# .#### ....# #...# .###.'],
+  ['h', '#.... #.... #.##. ##..# #...# #...# #...#'],
+  ['i', '..#.. ..... .##.. ..#.. ..#.. ..#.. .###.'],
+  ['j', '...#. ..... ..##. ...#. ...#. ...#. ...#. #..#. .##..'],
+  ['k', '#.... #.... #..#. #.#.. ##... #.#.. #..#.'],
+  ['l', '.##.. ..#.. ..#.. ..#.. ..#.. ..#.. .###.'],
+  ['m', '..... ..... ##.#. #.#.# #.#.# #.#.# #.#.#'],
+  ['n', '..... ..... #.##. ##..# #...# #...# #...#'],
+  ['o', '..... ..... .###. #...# #...# #...# .###.'],
+  ['p', '..... ..... ####. #...# #...# #...# ####. #.... #....'],
+  ['q', '..... ..... .#### #...# #...# #...# .#### ....# ....#'],
+  ['r', '..... ..... #.##. ##..# #.... #.... #....'],
+  ['s', '..... ..... .#### #.... .###. ....# ####.'],
+  ['t', '.#... .#... ###.. .#... .#... .#..# ..##.'],
+  ['u', '..... ..... #...# #...# #...# #..## .##.#'],
+  ['v', '..... ..... #...# #...# #...# .#.#. ..#..'],
+  ['w', '..... ..... #...# #...# #.#.# #.#.# .#.#.'],
+  ['x', '..... ..... #...# .#.#. ..#.. .#.#. #...#'],
+  ['y', '..... ..... #...# #...# #...# #...# .#### ....# .###.'],
+  ['z', '..... ..... ##### ...#. ..#.. .#... #####'],
+  ['0', '.###. #...# #..## #.#.# ##..# #...# .###.'],
+  ['1', '..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.'],
+  ['2', '.###. #...# ....# ...#. ..#.. .#... #####'],
+  ['3', '####. ....# ....# .###. ....# ....# ####.'],
+  ['4', '...#. ..##. .#.#. #..#. ##### ...#. ...#.'],
+  ['5', '##### #.... ####. ....# ....# #...# .###.'],
+  ['6', '..##. .#... #.... ####. #...# #...# .###.'],
+  ['7', '##### ....# ...#. ..#.. .#... .#... .#...'],
+  ['8', '.###. #...# #...# .###. #...# #...# .###.'],
+  ['9', '.###. #...# #...# .#### ....# ...#. .##..'],
+  ['!', '..#.. ..#.. ..#.. ..#.. ..#.. ..... ..#..'],
+  ['"', '.#.#. .#.#. ..... ..... ..... ..... .....'],
+  ['#', '.#.#. .#.#. ##### .#.#. ##### .#.#. .#.#.'],
+  ['$', '..#.. .#### #.#.. .###. ..#.# ####. ..#..'],
+  ['%', '##... ##..# ...#. ..#.. .#... #..## ...##'],
+  ['&', '.##.. #..#. #.#.. .#... #.#.# #..#. .##.#'],
+  ["'", '..#.. ..#.. ..... ..... ..... ..... .....'],
+  ['(', '...#. ..#.. .#... .#... .#... ..#.. ...#.'],
+  [')', '.#... ..#.. ...#. ...#. ...#. ..#.. .#...'],
+  ['*', '..... ..#.. #.#.# .###. #.#.# ..#.. .....'],
+  ['+', '..... ..#.. ..#.. ##### ..#.. ..#.. .....'],
+  [',', '..... ..... ..... ..... ..... .##.. .##.. ..#.. .#...'],
+  ['-', '..... ..... ..... ##### ..... ..... .....'],
+  ['.', '..... ..... ..... ..... ..... .##.. .##..'],
+  ['/', '....# ...#. ...#. ..#.. .#... .#... #....'],
+  [':', '..... .##.. .##.. ..... .##.. .##.. .....'],
+  [';', '..... .##.. .##.. ..... .##.. .##.. ..#.. .#...'],
+  ['<', '...#. ..#.. .#... #.... .#... ..#.. ...#.'],
+  ['=', '..... ..... ##### ..... ##### ..... .....'],
+  ['>', '.#... ..#.. ...#. ....# ...#. ..#.. .#...'],
+  ['?', '.###. #...# ....# ...#. ..#.. ..... ..#..'],
+  ['@', '.###. #...# #.### #.#.# #.### #.... .####'],
+  ['[', '.###. .#... .#... .#... .#... .#... .###.'],
+  ['\\', '#.... .#... .#... ..#.. ...#. ...#. ....#'],
+  [']', '.###. ...#. ...#. ...#. ...#. ...#. .###.'],
+  ['^', '..#.. .#.#. #...# ..... ..... ..... .....'],
+  ['_', '..... ..... ..... ..... ..... ..... ..... #####'],
+  ['`', '.#... ..#.. ..... ..... ..... ..... .....'],
+  ['{', '...## ..#.. ..#.. .#... ..#.. ..#.. ...##'],
+  ['|', '..#.. ..#.. ..#.. ..#.. ..#.. ..#.. ..#..'],
+  ['}', '##... ..#.. ..#.. ...#. ..#.. ..#.. ##...'],
+  ['~', '..... ..... .#... #.#.# ...#. ..... .....'],
+  ['\uFFFD', '##### #...# #...# #...# #...# #...# #####']
+];
+
+// Accent marks (combining characters after Unicode NFD) drawn 2 rows above the letter.
+const PIXEL_FONT_ACCENTS = {
+  '́': ['..#', '.#.'],   // acute
+  '̀': ['#..', '.#.'],   // grave
+  '̂': ['.#.', '#.#'],   // circumflex
+  '̃': ['.#.#', '#.#.'], // tilde
+  '̈': ['...', '#.#'],   // diaeresis
+  '̊': ['###', '#.#'],   // ring
+  '̌': ['#.#', '.#.']    // caron
+};
+const PIXEL_FONT_CEDILLA = ['.#.', '##.'];
+
+const PIXEL_FONT_ROWS = 9;       // glyph rows incl. descenders
+const PIXEL_FONT_TOP = 2;        // room for accents over capitals
+const PIXEL_FONT_LINE = PIXEL_FONT_TOP + PIXEL_FONT_ROWS + 1;
+
+const PIXEL_FONT = (() => {
+  const map = new Map();
+  for (const [ch, spec] of PIXEL_FONT_DATA) {
+    const rows = spec.split(' ');
+    while (rows.length < PIXEL_FONT_ROWS) rows.push('.....');
+    let minX = 5, maxX = -1;
+    for (const r of rows) for (let x = 0; x < 5; x++) if (r[x] === '#') { minX = Math.min(minX, x); maxX = Math.max(maxX, x); }
+    map.set(ch, { rows, minX, width: maxX - minX + 1 });
+  }
+  return map;
+})();
+
+const CAPTION_CHAR_SUBSTITUTES = {
+  '—': '-', '–': '-', '‘': "'", '’': "'", '“': '"', '”': '"',
+  '…': '...', ' ': ' ', '«': '<<', '»': '>>', 'º': 'o', 'ª': 'a',
+  '€': 'E', 'ß': 'ss'
+};
+
+// Turns one character into { rows, minX, width, accent, cedilla } or a space.
+function captionGlyph(ch) {
+  if (ch === ' ') return { space: true, width: 3 };
+  const decomposed = ch.normalize('NFD');
+  const base = decomposed[0];
+  const marks = decomposed.slice(1);
+  // Unknown letters/digits show as a box; unknown symbols and emoji are skipped.
+  if (!PIXEL_FONT.has(base) && !/[\p{L}\p{N}]/u.test(base)) return null;
+  const glyph = PIXEL_FONT.get(base) || PIXEL_FONT.get('\uFFFD');
+  let rows = glyph.rows;
+  let accent = null, cedilla = false;
+  for (const m of marks) {
+    if (PIXEL_FONT_ACCENTS[m]) accent = PIXEL_FONT_ACCENTS[m];
+    else if (m === '̧') cedilla = true;
+  }
+  // i and j lose their dot when they carry an accent.
+  if (accent && (base === 'i' || base === 'j')) rows = ['.....', '.....', ...rows.slice(2)];
+  return { rows, minX: glyph.minX, width: glyph.width, accent, cedilla, lower: base !== base.toUpperCase() };
+}
+
+function expandCaptionChars(text) {
+  let out = '';
+  for (const ch of text.normalize('NFC')) out += CAPTION_CHAR_SUBSTITUTES[ch] ?? ch;
+  return out;
+}
+
+function captionWordWidth(glyphs) {
+  return glyphs.reduce((w, g, i) => w + g.width + (i ? 1 : 0), 0);
+}
+
+// Word-wraps into lines of glyphs no wider than maxWidth font pixels.
+function layoutCaption(text, maxWidth) {
+  const lines = [];
+  for (const paragraph of expandCaptionChars(text).split(/\r?\n/)) {
+    const words = [];
+    for (const word of paragraph.split(' ')) {
+      if (!word) continue;
+      let glyphs = [...word].map(captionGlyph).filter(Boolean);
+      if (!glyphs.length) continue;
+      // Words wider than a whole line are split.
+      while (glyphs.length > 1 && captionWordWidth(glyphs) > maxWidth) {
+        let n = glyphs.length - 1;
+        while (n > 1 && captionWordWidth(glyphs.slice(0, n)) > maxWidth) n--;
+        words.push(glyphs.slice(0, n));
+        glyphs = glyphs.slice(n);
+      }
+      words.push(glyphs);
+    }
+    let line = [];
+    for (const w of words) {
+      const candidate = line.length ? [...line, captionGlyph(' '), ...w] : w;
+      if (line.length && captionWordWidth(candidate) > maxWidth) { lines.push(line); line = w.slice(); }
+      else line = candidate;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+// Rasterizes laid-out lines into a font-pixel bitmap; lines are centered.
+function rasterizeCaption(lines) {
+  const widths = lines.map(captionWordWidth);
+  const w = Math.max(1, ...widths);
+  const h = lines.length * PIXEL_FONT_LINE - 1;
+  const on = new Uint8Array(w * h);
+  const set = (x, y) => { if (x >= 0 && x < w && y >= 0 && y < h) on[y * w + x] = 1; };
+
+  lines.forEach((line, li) => {
+    let x = Math.floor((w - widths[li]) / 2);
+    const top = li * PIXEL_FONT_LINE + PIXEL_FONT_TOP;
+    for (const g of line) {
+      if (!g.space) {
+        for (let r = 0; r < PIXEL_FONT_ROWS; r++) {
+          for (let c = 0; c < g.width; c++) if (g.rows[r][g.minX + c] === '#') set(x + c, top + r);
+        }
+        if (g.accent) {
+          const aw = g.accent[0].length;
+          const ax = x + Math.floor((g.width - aw) / 2);
+          const ay = g.lower ? top : top - 2;
+          g.accent.forEach((row, r) => { for (let c = 0; c < aw; c++) if (row[c] === '#') set(ax + c, ay + r); });
+        }
+        if (g.cedilla) {
+          const cx = x + Math.floor((g.width - 3) / 2);
+          PIXEL_FONT_CEDILLA.forEach((row, r) => { for (let c = 0; c < 3; c++) if (row[c] === '#') set(cx + c, top + 7 + r); });
+        }
+      }
+      x += g.width + 1;
+    }
+  });
+
+  // Trim empty rows at the top and bottom so the strip is tight.
+  let y0 = 0, y1 = h - 1;
+  const rowEmpty = y => { for (let x = 0; x < w; x++) if (on[y * w + x]) return false; return true; };
+  while (y0 < y1 && rowEmpty(y0)) y0++;
+  while (y1 > y0 && rowEmpty(y1)) y1--;
+  return { w, h: y1 - y0 + 1, on: on.slice(y0 * w, (y1 + 1) * w) };
+}
+
+const CAPTION_COLORS = {
+  white: '#ffffff',
+  amber: '#ffc93c',
+  green: '#5dff8f',
+  cyan: '#62e6ff',
+  pink: '#ff7ad9'
+};
+
+/*
+  Draws the caption on a canvas that already holds the restored image.
+  style: 'strip' (black strip below the image), 'band' (dark band over the bottom),
+         'outline' (outlined text over the bottom of the image).
+  size: 'small' | 'medium' | 'large'.
+*/
+function drawCaptionOnCanvas(canvas, caption, { style = 'strip', size = 'medium', color = 'white' } = {}) {
+  if (!caption || !caption.trim()) return;
+
+  const W = canvas.width;
+  const px = Math.max(1, Math.round(W / ({ small: 190, medium: 130, large: 90 }[size] || 130)));
+  const pad = 3 * px;
+  const maxWidth = Math.max(8, Math.floor((W - 2 * pad) / px));
+  const bmp = rasterizeCaption(layoutCaption(caption.trim(), maxWidth));
+  const textW = bmp.w * px;
+  const textH = bmp.h * px;
+  const areaH = textH + 2 * pad;
+
+  const base = document.createElement('canvas');
+  base.width = canvas.width;
+  base.height = canvas.height;
+  base.getContext('2d').drawImage(canvas, 0, 0);
+
+  if (style === 'strip') canvas.height = base.height + areaH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(base, 0, 0);
+
+  const areaTop = style === 'strip' ? base.height : base.height - areaH;
+  if (style === 'band') {
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillRect(0, areaTop, W, areaH);
+  }
+
+  const ox = Math.round((W - textW) / 2);
+  const oy = areaTop + pad;
+  const paint = (dx, dy, fill) => {
+    ctx.fillStyle = fill;
+    for (let y = 0; y < bmp.h; y++) {
+      for (let x = 0; x < bmp.w; x++) {
+        if (bmp.on[y * bmp.w + x]) ctx.fillRect(ox + (x + dx) * px, oy + (y + dy) * px, px, px);
+      }
+    }
+  };
+
+  if (style === 'outline') {
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) paint(dx, dy, '#000');
+  } else {
+    paint(1, 1, 'rgba(0,0,0,0.55)'); // small drop shadow
+  }
+  paint(0, 0, CAPTION_COLORS[color] || '#fff');
+}
+
+/* ---------- Decoder enhancement (chosen by the encoder, stored as 2 header bytes) ----------
+  The encoder previews the result and stores which filter the decoder should use:
+    0 none      – sharp pixels, nearest-neighbour enlargement
+    1 smooth    – bicubic (Catmull-Rom) enlargement, optional light sharpening
+    2 undither  – blur away dither patterns, bicubic enlarge, then sharpen
+    3 deblock   – soften 4x4 block borders (codebook mode), then bicubic enlarge
+    4 pixelart  – Scale2x/EPX edge smoothing for flat-color pixel art
+  Everything is plain JS on RGB floats, so encoder preview and decoder output match.
+*/
+const ENHANCE_NONE = 0;
+const ENHANCE_SMOOTH = 1;
+const ENHANCE_UNDITHER = 2;
+const ENHANCE_DEBLOCK = 3;
+const ENHANCE_PIXELART = 4;
+
+const ENHANCE_NAMES = {
+  [ENHANCE_NONE]: 'none (sharp pixels)',
+  [ENHANCE_SMOOTH]: 'smooth upscale',
+  [ENHANCE_UNDITHER]: 'undither + smooth',
+  [ENHANCE_DEBLOCK]: 'deblock + smooth',
+  [ENHANCE_PIXELART]: 'pixel-art edge smoothing'
+};
+
+function enhanceDescription(mode, strength) {
+  const name = ENHANCE_NAMES[mode] || 'unknown';
+  return (mode === ENHANCE_NONE || mode === ENHANCE_PIXELART) ? name : `${name}, strength ${strength}`;
+}
+
+// Any decoded result -> ImageData at its stored resolution.
+function restoredToImageData(r) {
+  if (r.imageData) return r.imageData;
+  const { width: w, height: h } = r;
+  const out = new ImageData(w, h);
+  const d = out.data;
+  for (let p = 0; p < w * h; p++) {
+    let R, G, B;
+    if (r.grayPixels) {
+      R = G = B = r.grayPixels[p];
+    } else if (r.indexes) {
+      const c = r.palette[r.indexes[p]] || [255, 255, 255];
+      R = c[0]; G = c[1]; B = c[2];
+    } else {
+      R = G = B = (r.bits[p >> 3] & (1 << (7 - (p & 7)))) ? 0 : 255;
+    }
+    d[p * 4] = R; d[p * 4 + 1] = G; d[p * 4 + 2] = B; d[p * 4 + 3] = 255;
+  }
+  // Circle avatars: corners are not stored, so always show them black.
+  if (r.shapeMask === SHAPE_CIRCLE) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (isInsideCirclePixel(x, y, w, h)) continue;
+        const i = (y * w + x) * 4;
+        d[i] = d[i + 1] = d[i + 2] = 0;
+      }
+    }
+  }
+  return out;
+}
+
+function toFloatImage(imageData) {
+  const { width: w, height: h, data } = imageData;
+  const c = new Float32Array(w * h * 3);
+  for (let p = 0; p < w * h; p++) {
+    c[p * 3] = data[p * 4];
+    c[p * 3 + 1] = data[p * 4 + 1];
+    c[p * 3 + 2] = data[p * 4 + 2];
+  }
+  return { w, h, c };
+}
+
+function fromFloatImage(f) {
+  const out = new ImageData(f.w, f.h);
+  for (let p = 0; p < f.w * f.h; p++) {
+    out.data[p * 4] = f.c[p * 3];         // Uint8ClampedArray rounds and clamps
+    out.data[p * 4 + 1] = f.c[p * 3 + 1];
+    out.data[p * 4 + 2] = f.c[p * 3 + 2];
+    out.data[p * 4 + 3] = 255;
+  }
+  return out;
+}
+
+function gaussianBlurFloat(f, sigma) {
+  if (sigma <= 0.05) return f;
+  const r = Math.max(1, Math.ceil(sigma * 3));
+  const k = new Float32Array(r * 2 + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++) { k[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + r]; }
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+
+  const { w, h } = f;
+  const tmp = new Float32Array(f.c.length);
+  const out = new Float32Array(f.c.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let a = 0, b = 0, c = 0;
+      for (let i = -r; i <= r; i++) {
+        const xx = x + i < 0 ? 0 : x + i >= w ? w - 1 : x + i;
+        const q = (y * w + xx) * 3, kv = k[i + r];
+        a += f.c[q] * kv; b += f.c[q + 1] * kv; c += f.c[q + 2] * kv;
+      }
+      const o = (y * w + x) * 3;
+      tmp[o] = a; tmp[o + 1] = b; tmp[o + 2] = c;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let a = 0, b = 0, c = 0;
+      for (let i = -r; i <= r; i++) {
+        const yy = y + i < 0 ? 0 : y + i >= h ? h - 1 : y + i;
+        const q = (yy * w + x) * 3, kv = k[i + r];
+        a += tmp[q] * kv; b += tmp[q + 1] * kv; c += tmp[q + 2] * kv;
+      }
+      const o = (y * w + x) * 3;
+      out[o] = a; out[o + 1] = b; out[o + 2] = c;
+    }
+  }
+  return { w, h, c: out };
+}
+
+// Separable 4-tap box average (taps -2..+1), matching the 4x4 ordered-dither period.
+function boxBlur4Float(f) {
+  const { w, h } = f;
+  const tmp = new Float32Array(f.c.length), out = new Float32Array(f.c.length);
+  const cx = x => (x < 0 ? 0 : x >= w ? w - 1 : x), cy = y => (y < 0 ? 0 : y >= h ? h - 1 : y);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let ch = 0; ch < 3; ch++) {
+    let s = 0;
+    for (let i = -2; i <= 1; i++) s += f.c[(y * w + cx(x + i)) * 3 + ch];
+    tmp[(y * w + x) * 3 + ch] = s / 4;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let ch = 0; ch < 3; ch++) {
+    let s = 0;
+    for (let i = -2; i <= 1; i++) s += tmp[(cy(y + i) * w + x) * 3 + ch];
+    out[(y * w + x) * 3 + ch] = s / 4;
+  }
+  return { w, h, c: out };
+}
+
+function unsharpFloat(f, sigma, amount) {
+  if (amount <= 0) return f;
+  const b = gaussianBlurFloat(f, sigma);
+  const c = new Float32Array(f.c.length);
+  for (let i = 0; i < c.length; i++) c[i] = f.c[i] + amount * (f.c[i] - b.c[i]);
+  return { w: f.w, h: f.h, c };
+}
+
+function cubicWeights(t) {
+  // Catmull-Rom spline weights for taps at -1, 0, 1, 2
+  const t2 = t * t, t3 = t2 * t;
+  return [
+    -0.5 * t3 + t2 - 0.5 * t,
+    1.5 * t3 - 2.5 * t2 + 1,
+    -1.5 * t3 + 2 * t2 + 0.5 * t,
+    0.5 * t3 - 0.5 * t2
+  ];
+}
+
+function bicubicResizeFloat(f, W, H) {
+  const { w, h } = f;
+  const plan = (src, dst) => {
+    const idx = new Int32Array(dst * 4), wt = new Float32Array(dst * 4);
+    for (let o = 0; o < dst; o++) {
+      const s = (o + 0.5) * src / dst - 0.5;
+      const s0 = Math.floor(s);
+      const ws = cubicWeights(s - s0);
+      for (let j = 0; j < 4; j++) {
+        const ii = s0 - 1 + j;
+        idx[o * 4 + j] = ii < 0 ? 0 : ii >= src ? src - 1 : ii;
+        wt[o * 4 + j] = ws[j];
+      }
+    }
+    return { idx, wt };
+  };
+  const px = plan(w, W), py = plan(h, H);
+
+  const tmp = new Float32Array(W * h * 3);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < W; x++) {
+      let a = 0, b = 0, c = 0;
+      for (let j = 0; j < 4; j++) {
+        const q = (y * w + px.idx[x * 4 + j]) * 3, kv = px.wt[x * 4 + j];
+        a += f.c[q] * kv; b += f.c[q + 1] * kv; c += f.c[q + 2] * kv;
+      }
+      const o = (y * W + x) * 3;
+      tmp[o] = a; tmp[o + 1] = b; tmp[o + 2] = c;
+    }
+  }
+  const out = new Float32Array(W * H * 3);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let a = 0, b = 0, c = 0;
+      for (let j = 0; j < 4; j++) {
+        const q = (py.idx[y * 4 + j] * W + x) * 3, kv = py.wt[y * 4 + j];
+        a += tmp[q] * kv; b += tmp[q + 1] * kv; c += tmp[q + 2] * kv;
+      }
+      const o = (y * W + x) * 3;
+      out[o] = a; out[o + 1] = b; out[o + 2] = c;
+    }
+  }
+  return { w: W, h: H, c: out };
+}
+
+// Softens steps at 4x4 block borders, but leaves real edges (big steps) alone.
+function deblockFloat(f, strength) {
+  const { w, h } = f;
+  const c = Float32Array.from(f.c);
+  const T = 10 + strength * 0.5;
+  const lum = (i) => 0.299 * c[i] + 0.587 * c[i + 1] + 0.114 * c[i + 2];
+  const fix = (ia, ib, ic, id) => {
+    const la = lum(ia), lb = lum(ib), lc = lum(ic), ld = lum(id);
+    if (Math.abs(lb - lc) > T || Math.abs(la - lb) > T * 0.75 || Math.abs(lc - ld) > T * 0.75) return;
+    for (let ch = 0; ch < 3; ch++) {
+      const A = c[ia + ch], D = c[id + ch];
+      c[ib + ch] = c[ib + ch] * 0.25 + (A + (D - A) / 3) * 0.75;
+      c[ic + ch] = c[ic + ch] * 0.25 + (A + 2 * (D - A) / 3) * 0.75;
+    }
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 4; x + 1 < w; x += 4) fix((y * w + x - 2) * 3, (y * w + x - 1) * 3, (y * w + x) * 3, (y * w + x + 1) * 3);
+  }
+  for (let y = 4; y + 1 < h; y += 4) {
+    for (let x = 0; x < w; x++) fix(((y - 2) * w + x) * 3, ((y - 1) * w + x) * 3, (y * w + x) * 3, ((y + 1) * w + x) * 3);
+  }
+  return { w, h, c };
+}
+
+// Scale2x / EPX on exact colors: rounds staircase edges of flat-color art.
+function scale2xImageData(src) {
+  const { width: w, height: h } = src;
+  const s = new Uint32Array(src.data.buffer.slice(0));
+  const out = new ImageData(w * 2, h * 2);
+  const o = new Uint32Array(out.data.buffer);
+  const at = (x, y) => s[(y < 0 ? 0 : y >= h ? h - 1 : y) * w + (x < 0 ? 0 : x >= w ? w - 1 : x)];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+      const W2 = w * 2, base = (y * 2) * W2 + x * 2;
+      o[base] = (C === A && C !== D && A !== B) ? A : P;
+      o[base + 1] = (A === B && A !== C && B !== D) ? B : P;
+      o[base + W2] = (D === C && D !== B && C !== A) ? C : P;
+      o[base + W2 + 1] = (B === D && B !== A && D !== C) ? D : P;
+    }
+  }
+  return out;
+}
+
+function nearestScaleImageData(src, W, H) {
+  const out = new ImageData(W, H);
+  const s = new Uint32Array(src.data.buffer.slice(0)), o = new Uint32Array(out.data.buffer);
+  for (let y = 0; y < H; y++) {
+    const sy = Math.min(src.height - 1, Math.floor(y * src.height / H));
+    for (let x = 0; x < W; x++) o[y * W + x] = s[sy * src.width + Math.min(src.width - 1, Math.floor(x * src.width / W))];
+  }
+  return out;
+}
+
+function enhanceImageData(src, mode, strength, W, H) {
+  const k = Math.max(0, Math.min(100, strength)) / 100;
+  const scale = W / src.width;
+
+  if (mode === ENHANCE_PIXELART) {
+    let img = src;
+    while (img.width < W) img = scale2xImageData(img);
+    return img.width === W ? img : fromFloatImage(bicubicResizeFloat(toFloatImage(img), W, H));
+  }
+
+  let f = toFloatImage(src);
+  if (mode === ENHANCE_SMOOTH) {
+    f = bicubicResizeFloat(f, W, H);
+    return fromFloatImage(unsharpFloat(f, Math.max(0.6, scale * 0.5), k * 0.8));
+  }
+  if (mode === ENHANCE_UNDITHER) {
+    // Blur wide enough to average out dither cells, then restore local contrast with a
+    // wide (not pixel-sized) sharpen so the dither pattern isn't brought back.
+    if (k >= 0.6) {
+      // Strong: average over a 4x4 cell first (the ordered-dither period), then soften.
+      f = boxBlur4Float(f);
+      f = gaussianBlurFloat(f, 0.6 + (k - 0.6) * 1.5);
+    } else {
+      f = gaussianBlurFloat(f, 0.5 + k * 1.6);
+    }
+    f = bicubicResizeFloat(f, W, H);
+    return fromFloatImage(unsharpFloat(f, Math.max(1.2, scale * 1.8), 0.3 + k * 0.35));
+  }
+  if (mode === ENHANCE_DEBLOCK) {
+    f = deblockFloat(f, 20 + k * 80);
+    f = gaussianBlurFloat(f, 0.2 + k * 0.4);
+    f = bicubicResizeFloat(f, W, H);
+    return fromFloatImage(unsharpFloat(f, Math.max(0.8, scale * 0.7), 0.3));
+  }
+  return nearestScaleImageData(src, W, H);
+}
+
+/*
+  Draws a decoded result, enlarged to about 512 px, using the enhancement the
+  encoder stored. options.raw = true shows the plain stored pixels instead.
+*/
+function drawRestoredBase(restored, canvas, options = {}) {
+  // Text-only cards have no picture: leave an empty, hidden canvas.
+  canvas.style.display = restored.noImage ? 'none' : '';
+  if (restored.noImage) { canvas.width = canvas.height = 1; canvas.getContext('2d').clearRect(0, 0, 1, 1); return; }
+  const src = restoredToImageData(restored);
+  const scale = Math.max(1, Math.floor(512 / Math.max(src.width, src.height)));
+  const W = src.width * scale, H = src.height * scale;
+  const mode = options.raw ? ENHANCE_NONE : (restored.enhance || ENHANCE_NONE);
+
+  let out = mode === ENHANCE_NONE || scale === 1 && mode !== ENHANCE_UNDITHER && mode !== ENHANCE_DEBLOCK
+    ? nearestScaleImageData(src, W, H)
+    : enhanceImageData(src, mode, restored.enhanceStrength || 0, W, H);
+
+  // Re-cut the avatar circle crisply at display resolution.
+  if (mode !== ENHANCE_NONE && restored.shapeMask === SHAPE_CIRCLE) {
+    const o = new Uint32Array(out.data.buffer);
+    const black = new Uint32Array(new Uint8ClampedArray([0, 0, 0, 255]).buffer)[0];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) if (!isInsideCirclePixel(x, y, W, H)) o[y * W + x] = black;
+    }
+  }
+
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.imageRendering = mode === ENHANCE_NONE ? 'pixelated' : 'auto';
+  canvas.getContext('2d').putImageData(out, 0, 0);
+}
+
+function drawRestoredWithCaption(restored, canvas, captionOptions, drawOptions) {
+  drawRestoredBase(restored, canvas, drawOptions);
+  if (captionOptions && captionOptions.enabled && restored.caption && !restored.noImage) {
+    drawCaptionOnCanvas(canvas, restored.caption, captionOptions);
+  }
+}
+
+/* ---------- rendering the result ---------- */
+
+let lastRestored = null;
+
+function getCaptionOptions() {
+  return {
+    enabled: $('captionOnImage').checked,
+    style: $('captionStyle').value,
+    size: $('captionSize').value,
+    color: $('captionColor').value
+  };
+}
+
+function renderRestoredCanvas() {
+  $('captionStyleRow').classList.toggle('hidden', !$('captionOnImage').checked);
+  if (lastRestored) drawRestoredWithCaption(lastRestored, restoredCanvas, getCaptionOptions());
+}
+
+['captionOnImage', 'captionStyle', 'captionSize', 'captionColor'].forEach(id => $(id).addEventListener('change', renderRestoredCanvas));
+
+function renderRestored(restored) {
+  lastRestored = restored;
+  renderRestoredCanvas();
+  $('restoredHeading').classList.toggle('hidden', !!restored.noImage);
+  downloadBtn.classList.toggle('hidden', !!restored.noImage);
+
+  restoredCaption.textContent = restored.caption || '(none)';
+  $('restoredDescription').textContent = restored.description || '';
+  $('descriptionBox').classList.toggle('hidden', !restored.description);
+  $('restoredFooter').textContent = restored.footer || '';
+  $('footerBox').classList.toggle('hidden', !restored.footer);
+
+  resultStatus.textContent = [
+    `Mode: ${restored.formatName || '1-bit black/white'}`,
+    restored.webpQuality ? `WebP quality: ${restored.webpQuality}` : '',
+    `Enhancement: ${enhanceDescription(restored.enhance, restored.enhanceStrength)}`,
+    restored.noImage ? 'Image: none (text-only card)' : `Image: ${restored.width} x ${restored.height} pixels`,
+    restored.blockSize && String(restored.format).startsWith('indexed') ? `Pixel block size: ${restored.blockSize}x${restored.blockSize}` : '',
+    `Caption: ${restored.caption ? 'yes' : 'no'}`,
+    `Encryption: ${restored.encrypted ? 'yes, AES-GCM' : 'no'}`,
+    `Compression: ${restored.compression}`,
+    `Circle avatar mode: ${restored.shapeMask === SHAPE_CIRCLE ? 'yes' : 'no'}`,
+    `Scanline transform: ${scanlineTransformName(restored.scanlineTransform)}`,
+    lastTransport ? `QR transport: ${lastTransport}` : ''
+  ].filter(Boolean).join('\n');
+
+  show(resultCard);
+  resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- payload handling ---------- */
+
+function resetOutputs() {
+  const cardTab = document.querySelector('#resultCard .tab[data-tab="card"]');
+  if (cardTab) cardTab.click();
+  hide($('memoBox'));
+  $('restoredMemo').textContent = '';
+  show($('restoredMemo'));
+  hide($('memoImage'));
+  $('memoImage').removeAttribute('src');
+  hide($('downloadMemoImageBtn'));
+  $('memoLabel').textContent = 'Memo';
+  pendingMemoPicture = null;
+  pendingMemoText = '';
+  $('cardFlip').classList.remove('flipped', 'has-back');
+  setCardFlip($('cardFlip'), $('flipCardBtn'), false);
+  hide(passwordCard);
+  hide(resultCard);
+  hide(passwordStatus);
+  passwordStatus.textContent = '';
+  passwordInput.value = '';
+  pendingPayload = null;
+}
+
+function payloadHasMemo(payload) {
+  return payload.length > 22 && payload[4] >= 3 && (payload[22] & SHAPE_BYTE_HAS_MEMO) !== 0;
+}
+
+async function renderMemo(restored, password) {
+  if (!restored.hasMemo) return;
+  show($('memoBox'));
+  const box = $('restoredMemo');
+  const parts = pendingMemoParts;
+  if (!parts && launchedFromLink) {
+    box.textContent = 'This QR also carries a color memo, which a link cannot pass on. Tap "Start camera" and scan the same code to read it.';
+    hide($('copyMemoBtn'));
+    return;
+  }
+  if (!memoPartsComplete(parts)) {
+    box.textContent = restored.memoHd
+      ? `The detail layer in the color layers couldn't be read (${parts ? parts.size : 0} of ${parts && parts.count ? parts.count : 2} layers found), so the card shows the basic picture. For the HD version, scan closer with steady, even light, or open the card PNG/PDF file.`
+      : `The color memo couldn't be read (${parts ? parts.size : 0} of ${parts && parts.count ? parts.count : 2} layers found). Try again closer, so the code fills most of the frame, with steady, even light.`;
+    if (restored.memoHd) $('memoLabel').textContent = 'Sharper picture';
+    hide($('copyMemoBtn'));
+    return;
+  }
+  try {
+    const memo = await decodeMemoPayload(joinMemoParts(parts), password);
+    pendingMemoText = memo.text || '';
+    if (memo.type === 'text') {
+      box.textContent = memo.text;
+      show($('copyMemoBtn'));
+      resultStatus.textContent += `\nMemo: ${box.textContent.length} characters from ${parts.count} color layer(s)`;
+    } else {
+      const el = memo.role === MEMO_IMAGE_DETAIL ? await detailPictureCanvas(restored, memo) : await memoImageElement(memo);
+      if (!el) throw new Error('The detail layer needs a WebP picture.');
+      pendingMemoPicture = { ...memo, element: el };
+      const name = memo.role === MEMO_IMAGE_DETAIL ? 'Sharper picture' : memo.role === MEMO_IMAGE_HD ? 'HD avatar' : 'Back image';
+      $('memoLabel').textContent = (memo.text ? `Memo, and ${name.toLowerCase().replace('hd', 'HD')}` : name) + ' (flip the card to see the picture large)';
+      if (memo.text) {
+        box.textContent = memo.text;
+        show($('copyMemoBtn'));
+        resultStatus.textContent += `\nMemo: ${memo.text.length} characters`;
+      } else {
+        hide(box);
+        hide($('copyMemoBtn'));
+      }
+      $('memoImage').src = el.src || el.toDataURL('image/png');
+      show($('memoImage'));
+      show($('downloadMemoImageBtn'));
+      resultStatus.textContent += `\n${name}${memo.role === MEMO_IMAGE_DETAIL ? ' (detail layer)' : ''}: ${el.naturalWidth || el.width} x ${el.naturalHeight || el.height} from ${parts.count} color layer(s)`;
+    }
+  } catch (err) {
+    box.textContent = err.message || String(err);
+    hide($('copyMemoBtn'));
+  }
+}
+
+async function decodeAndRender(payload, password) {
+  try {
+    const restored = await parsePayload(payload, password);
+    hide(passwordCard);
+    renderRestored(restored);
+    await renderMemo(restored, password);
+    await buildScannerCard(restored);
+    setStatus('Decoded successfully.', 'ok');
+    return true;
+  } catch (err) {
+    const msg = err.message || String(err);
+    if (/encrypted/i.test(msg) || /password/i.test(msg)) {
+      passwordStatus.textContent = msg;
+      passwordStatus.className = 'err';
+      show(passwordStatus);
+    } else {
+      setStatus(msg, 'err');
+    }
+    return false;
+  }
+}
+
+// Accepts a jsQR result holding either raw binary (v14+) or IMGQR1. base64 text (older QRs).
+function isImageQrResult(res) {
+  try { qrResultToPayload(res); return true; } catch { return false; }
+}
+
+// Rebuilds the QR content segments exactly as the encoder wrote them.
+function qrSourceFromScan(res, payload, transport) {
+  let segments;
+  let label = 'SCAN TO REVEAL';
+  if (transport === 'phone-camera link') {
+    const text = res.launched ? location.href.split('#')[0] + '#' + decodeURIComponent(location.hash.slice(1)) : res.data;
+    const i = text.indexOf('#');
+    segments = [{ data: text.slice(0, i + 1), mode: 'Byte' }, { data: text.slice(i + 1).toUpperCase(), mode: 'Alphanumeric' }];
+    label = 'SCAN WITH ANY PHONE CAMERA';
+  } else if (transport === 'base64 text') {
+    segments = [{ data: res.data, mode: 'Byte' }];
+  } else {
+    segments = [{ data: bytesToQrString(payload), mode: 'Byte' }];
+  }
+  // For link codes, the decoder address (without the #) is shown on the card.
+  const decoderUrl = transport === 'phone-camera link' ? segments[0].data.replace(/#$/, '') : '';
+  return { segments, ecc: res.ecLevel || null, label, payloadBytes: payload.length, decoderUrl };
+}
+
+function memoLayersFromParts(parts) {
+  if (!memoPartsComplete(parts)) return null;
+  const layers = [];
+  for (let i = 0; i < parts.count; i++) layers.push(concatBytes(MEMO_MAGIC, [i, parts.count], parts.get(i)));
+  if (parts.count === 1) layers.push(layers[0]);
+  return layers;
+}
+
+async function buildScannerCard(restored) {
+  if (!lastQrSource) return;
+  const qr = document.createElement('canvas');
+  const memoLayers = memoLayersFromParts(pendingMemoParts);
+  let usedEcc = null;
+  for (const ecc of [lastQrSource.ecc, 'M', 'L', 'Q', 'H'].filter(Boolean)) {
+    try { drawQr(lastQrSource.segments, ecc, qr, memoLayers); usedEcc = ecc; break; } catch (e) { /* try next level */ }
+  }
+  if (!usedEcc) return;
+  const pic = pendingMemoPicture;
+  const front = await renderCardFromRestored($('cardCanvas'), restored, {
+    avatarImage: pic && (pic.role === MEMO_IMAGE_HD || pic.role === MEMO_IMAGE_DETAIL) ? pic.element : null,
+    qr,
+    qrLabel: lastQrSource.label,
+    payloadBytes: lastQrSource.payloadBytes,
+    memoBytes: memoLayers ? joinMemoParts(pendingMemoParts).length : 0,
+    memoLayers: memoLayers && pendingMemoParts.count > 1 ? 2 : 1,
+    ecc: usedEcc,
+    decoderUrl: lastQrSource.decoderUrl || ''
+  });
+  await updateCardBack({
+    picture: pic ? pic.element : null,
+    circle: restored.shapeMask === SHAPE_CIRCLE && (!pic || pic.role !== MEMO_IMAGE_BACK),
+    memoText: pendingMemoText,
+    fallback: front
+  });
+}
+
+async function handleDetectedResult(res, parts = null) {
+  resetOutputs();
+  pendingMemoParts = parts;
+
+  let payload;
+  try {
+    const parsed = qrResultToPayload(res);
+    payload = parsed.payload;
+    lastQrSource = qrSourceFromScan(res, payload, parsed.transport);
+    lastTransport = res.launched ? 'phone-camera link (opened this page)' : parsed.transport;
+  } catch (err) {
+    setStatus(err.message || String(err), 'err');
+    return;
+  }
+
+  // peek the "encrypted" flag (byte 7) without decoding
+  const encrypted = payload.length >= 8 && payload[7] === 1;
+
+  if (encrypted) {
+    pendingPayload = payload;
+    setStatus('Encrypted QR detected. Enter the password below.', 'ok');
+    show(passwordCard);
+    passwordInput.focus();
+  } else {
+    setStatus('QR detected. Decoding...', '');
+    await decodeAndRender(payload, '');
+  }
+}
+
+decryptBtn.addEventListener('click', async () => {
+  if (!pendingPayload) return;
+  hide(passwordStatus);
+  await decodeAndRender(pendingPayload, passwordInput.value || '');
+});
+
+passwordInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') decryptBtn.click();
+});
+
+/* ---------- camera scanning ---------- */
+
+const scanCanvas = document.createElement('canvas');
+const sctx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+let tickBusy = false;
+let cropToggle = false;
+
+// Grabs one camera frame as ImageData. Alternates between the whole frame
+// (downscaled) and the center at full camera resolution, which acts like a 2x zoom
+// for small or distant codes.
+function grabFrame() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  cropToggle = !cropToggle;
+  const frac = cropToggle ? 1 : 0.5; // full frame, then the center at full resolution
+  const cw = vw * frac, ch = vh * frac;
+  const cx = (vw - cw) / 2, cy = (vh - ch) / 2;
+  const scale = Math.min(1, 1600 / Math.max(cw, ch));
+  const w = Math.max(1, Math.round(cw * scale)), h = Math.max(1, Math.round(ch * scale));
+  scanCanvas.width = w;
+  scanCanvas.height = h;
+  sctx.drawImage(video, cx, cy, cw, ch, 0, 0, w, h);
+  return sctx.getImageData(0, 0, w, h);
+}
+
+async function scanFrame(now) {
+  const data = grabFrame();
+  if (!data) return;
+
+  const res = await scanImageQr(data, { invert: false });
+  if (!scanning) return;
+  const isImage = res && isImageQrResult(res);
+
+  if (isImage && !memoParts) {
+    const payload = qrResultToPayload(res).payload;
+    if (!payloadHasMemo(payload)) {
+      stopCamera();
+      handleDetectedResult(res);
+      return;
+    }
+    // Color QR: keep reading frames until both memo layers are captured (max 8 s).
+    // Phone video keeps color at half resolution, so the memo needs the code larger in frame.
+    memoParts = new Map();
+    const hdOnly = payload.length > 22 && (payload[22] & SHAPE_BYTE_MEMO_HD) !== 0;
+    memoDeadline = now + (hdOnly ? 4000 : 8000);
+    memoResult = res;
+  }
+
+  if (memoParts) {
+    await readMemoFromImage(data, isImage ? res : null, memoParts, { quick: true });
+    if (!scanning || !memoParts) return;
+    if (memoPartsComplete(memoParts) || performance.now() > memoDeadline) {
+      const parts = memoParts, found = memoResult;
+      memoParts = null;
+      stopCamera();
+      handleDetectedResult(found, parts);
+      return;
+    }
+    setScanHint(`Image found. Reading color memo (${memoParts.size} of ${memoParts.count || 2})... move closer or zoom so the code fills the frame.`);
+  } else if (res) {
+    setScanHint('Found a QR, but not an image-QR from this tool. Keep aiming...');
+  } else {
+    setScanHint('Looking for a QR code... move closer or use zoom so the code fills the frame.');
+  }
+}
+
+function tick(now) {
+  if (!scanning) return;
+  if (!tickBusy && video.readyState >= video.HAVE_CURRENT_DATA && (now - lastScan) > 60) {
+    lastScan = now;
+    tickBusy = true;
+    scanFrame(now).catch(err => console.warn(err)).finally(() => { tickBusy = false; });
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+async function startCamera() {
+  resetOutputs();
+  setStatus('Requesting camera...');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('Camera API unavailable here. This page must be served over HTTPS (or localhost). Use the photo option below.', 'err');
+    return;
+  }
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        // Dense Version-40 codes need many camera pixels per square.
+        width: { ideal: 2560 },
+        height: { ideal: 1440 }
+      },
+      audio: false
+    });
+  } catch (err) {
+    let msg = 'Could not start the camera. ';
+    if (err && err.name === 'NotAllowedError') msg += 'Permission was denied.';
+    else if (err && err.name === 'NotFoundError') msg += 'No camera was found.';
+    else if (err && err.name === 'NotReadableError') msg += 'The camera is already in use by another app.';
+    else if (err && err.name === 'SecurityError') msg += 'Blocked: the page must be served over HTTPS.';
+    else msg += (err && err.message) ? err.message : 'Unknown error.';
+    msg += ' You can still decode from a photo below.';
+    setStatus(msg, 'err');
+    return;
+  }
+
+  track = stream.getVideoTracks()[0];
+  video.srcObject = stream;
+
+  try { await video.play(); } catch (e) { /* iOS sometimes needs the gesture; play() may resolve late */ }
+
+  viewport.classList.add('active');
+  hide(startBtn);
+  show(stopBtn);
+
+  // optional flashlight if the device exposes it
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (caps && caps.torch) { show(torchBtn); } else { hide(torchBtn); }
+
+  // Zoom slider when the camera supports optical/digital zoom.
+  if (caps && caps.zoom && caps.zoom.max > caps.zoom.min) {
+    const zr = $('zoomRange');
+    zr.min = caps.zoom.min;
+    zr.max = Math.min(caps.zoom.max, 8);
+    zr.step = caps.zoom.step || 0.1;
+    zr.value = Math.min(Number(zr.max), Math.max(Number(zr.min), 1.5));
+    applyZoom();
+    show($('zoomRow'));
+  } else {
+    hide($('zoomRow'));
+  }
+
+  // ask for continuous autofocus when the device supports it (helps dense codes)
+  try {
+    const adv = [];
+    if (caps && caps.focusMode && caps.focusMode.includes('continuous')) {
+      adv.push({ focusMode: 'continuous' });
+    }
+    if (adv.length) await track.applyConstraints({ advanced: adv });
+  } catch (e) { /* not supported; ignore */ }
+
+  scanning = true;
+  lastScan = 0;
+  setStatus('Camera active. Hold the QR steady inside the frame, with good light.', 'ok');
+  setScanHint('Looking for a QR code...');
+  rafId = requestAnimationFrame(tick);
+}
+
+async function applyZoom() {
+  const z = Number($('zoomRange').value);
+  $('zoomOut').textContent = z.toFixed(1) + '\u00d7';
+  if (!track) return;
+  try { await track.applyConstraints({ advanced: [{ zoom: z }] }); } catch (e) { /* ignore */ }
+}
+
+function stopCamera() {
+  scanning = false;
+  memoParts = null;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  track = null;
+  torchOn = false;
+  hide($('zoomRow'));
+  video.srcObject = null;
+  viewport.classList.remove('active');
+  show(startBtn);
+  hide(stopBtn);
+  hide(torchBtn);
+}
+
+startBtn.addEventListener('click', startCamera);
+
+stopBtn.addEventListener('click', () => {
+  stopCamera();
+  setStatus('Camera stopped.', '');
+});
+
+torchBtn.addEventListener('click', async () => {
+  if (!track) return;
+  try {
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+    torchBtn.textContent = torchOn ? 'Flashlight off' : 'Flashlight';
+  } catch (e) {
+    setStatus('This device would not toggle the flashlight.', 'err');
+  }
+});
+
+/* ---------- photo fallback ---------- */
+
+photoFile.addEventListener('change', async () => {
+  const file = photoFile.files[0];
+  if (!file) return;
+  stopCamera();
+  resetOutputs();
+  setStatus('Reading photo...');
+
+  try {
+    let data;
+    if (isPdfFile(file)) {
+      data = await pdfFileToImageData(file);
+    } else {
+      const img = await loadImageFromFile(file);
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      data = ctx.getImageData(0, 0, c.width, c.height);
+    }
+    const res = await scanImageQr(data);
+
+    if (!res) { setStatus('No QR code found in that photo.', 'err'); return; }
+    const photoPayload = isImageQrResult(res) ? qrResultToPayload(res).payload : null;
+    await handleDetectedResult(res, photoPayload && payloadHasMemo(photoPayload) ? await readMemoFromImage(data, res) : null);
+  } catch (err) {
+    setStatus(err.message || String(err), 'err');
+  }
+});
+
+/* ---------- result actions ---------- */
+
+downloadBtn.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = restoredCanvas.toDataURL('image/png');
+  a.download = 'restored-from-qr.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+againBtn.addEventListener('click', () => {
+  resetOutputs();
+  photoFile.value = '';
+  startCamera();
+});
+
+$('copyMemoBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('restoredMemo').textContent);
+    $('copyMemoBtn').textContent = 'Copied';
+    setTimeout(() => { $('copyMemoBtn').textContent = 'Copy memo'; }, 1500);
+  } catch {
+    setStatus('Copy failed. Select the memo text and copy it manually.', 'err');
+  }
+});
+
+$('zoomRange').addEventListener('input', applyZoom);
+
+// Opened from a phone camera / Google Lens link: the image data is in the # part.
+let launchedFromLink = false;
+async function handleLaunchLink() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  launchedFromLink = true;
+  try {
+    const payload = base41Decode(decodeURIComponent(hash));
+    if (!hasPayloadMagic(payload)) throw new Error('not an image QR');
+    await handleDetectedResult({ binaryData: payload, data: '', launched: true });
+  } catch (err) {
+    setStatus('This link does not contain a readable image QR. ' + (err.message || ''), 'err');
+  }
+}
+handleLaunchLink();
+window.addEventListener('hashchange', handleLaunchLink);
+
+// Result tabs: Card first, then the detailed decode results.
+document.querySelectorAll('#resultCard .tab').forEach(tab => tab.addEventListener('click', () => {
+  document.querySelectorAll('#resultCard .tab').forEach(t => { t.classList.toggle('active', t === tab); t.setAttribute('aria-selected', t === tab); });
+  document.querySelectorAll('#resultCard .tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.tab));
+}));
+
+$('downloadCardBtn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = $('cardCanvas').toDataURL('image/png');
+  a.download = 'image-qr-card.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+$('flipCardBtn').addEventListener('click', () => toggleCardFlip($('cardFlip'), $('flipCardBtn')));
+$('cardFlip').addEventListener('click', () => { if ($('cardFlip').classList.contains('has-back')) toggleCardFlip($('cardFlip'), $('flipCardBtn')); });
+$('cardBackMemo').addEventListener('click', e => e.stopPropagation()); // reading or selecting the memo doesn't flip the card
+$('downloadMemoImageBtn').addEventListener('click', () => {
+  const p = pendingMemoPicture;
+  if (!p) return;
+  const a = document.createElement('a');
+  if (p.role === MEMO_IMAGE_DETAIL) {
+    a.href = p.element.toDataURL('image/png');
+    a.download = 'trilayerqr-sharper-picture.png';
+  } else {
+    a.href = URL.createObjectURL(new Blob([p.bytes], { type: p.mime }));
+    a.download = (p.role === MEMO_IMAGE_HD ? 'trilayerqr-hd-avatar.' : 'trilayerqr-back-image.') + (p.mime === 'image/jpeg' ? 'jpg' : 'webp');
+  }
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+});
+
+$('downloadCardPdfBtn').addEventListener('click', () => {
+  const title = (lastRestored && lastRestored.caption) || 'TriLayerQR card';
+  downloadCanvasAsPdf($('cardCanvas'), 'image-qr-card.pdf', title).catch(err => setStatus(err.message || String(err), 'err'));
+});
+
+window.addEventListener('pagehide', stopCamera);
+</script>
+</body>
+</html>
