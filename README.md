@@ -20,6 +20,7 @@ Built by [DaragonTech](https://daragon.tech).
 
 [![ Editor ](https://img.shields.io/badge/demo-live-green)](https://www.daragon.tech/go/qrscanv1/editor.html)
 [![ Scanner ](https://img.shields.io/badge/demo-live-green)](https://www.daragon.tech/go/qrscanv1/)
+[![ Simple ](https://img.shields.io/badge/demo-live-green)](https://www.daragon.tech/go/qrscanv1/simple.html)
 
 ---
 
