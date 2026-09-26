@@ -1,4 +1,4 @@
-# TriLayerQR
+﻿![TriLayerQR-Icon](./trilayerqr-icon.png)
 
 **One QR code was never enough. So we stacked three. A new kind of QR for the AI age was born. TriLayerQR puts a photo, a title, a description and pages of text inside a single scannable code.**
 
@@ -6,11 +6,27 @@ TriLayerQR is a high-capacity code that stacks three QR codes into one. The gree
 
 Built by [DaragonTech](https://daragon.tech).
 
+﻿![cover-v5-optimized](./samples/sample-sonnet18-card.png)
+
+## Live Demo (GitHub.io)
+
+[![ Editor ](https://img.shields.io/badge/demo-live-green)](https://daragontech.github.io/TriLayerQR/src/trilayerqr.editor.v1.html)
+[![ Scanner ](https://img.shields.io/badge/demo-live-green)](https://daragontech.github.io/TriLayerQR/src/trilayerqr.scanner.v1.html)
+
+## Live Demo (Daragon.tech)
+
+[![ Editor ](https://img.shields.io/badge/demo-live-green)](https://www.daragon.tech/go/qrscanv1/editor.html)
+[![ Scanner ](https://img.shields.io/badge/demo-live-green)](https://www.daragon.tech/go/qrscanv1/)
+
 ---
 
 ## Why TriLayerQR exists
 
-It started with one question at DaragonTech: **can you jack an entire AI persona into a single QR code?**
+It started with one question at DaragonTech: 
+
+**Can you jack an entire AI persona into a single QR code?**
+
+﻿![AI-Card-Sample](./samples/sample-atlas9-card.png)
 
 A persona is three things: a **face** to wear, **settings** that describe it, and a **prompt** that decides how it thinks and speaks. A standard QR can barely hold the face. So we split the signal into three layers:
 
@@ -228,4 +244,4 @@ It builds on excellent open-source work:
 
 Released under the [MIT License](LICENSE). Fork it, remix it, build on it.
 
-> **TriLayerQR** by [DaragonTech](https://daragon.tech)
+> **TriLayerQR** by [DaragonTech](https://daragon.tech) and Felipe Daragon.
