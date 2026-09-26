@@ -1,4 +1,4 @@
-﻿![TriLayerQR-Icon](./trilayerqr-icon.png)
+![TriLayerQR-Icon](./trilayerqr-icon.png)
 
 **One QR code was never enough. So we stacked three. A new kind of QR for the AI age was born. TriLayerQR puts a photo, a title, a description and pages of text inside a single scannable code.**
 
@@ -6,12 +6,15 @@ TriLayerQR is a high-capacity code that stacks three QR codes into one. The gree
 
 Built by [DaragonTech](https://daragon.tech).
 
+> **Just need a bigger everyday QR code?** Try **[TriLayerQR Simple](README.simple.md)**, the lightweight sibling: text in, code out, no cards or pictures. It stores **twice the data in the same size** (about 3–5× the text for longer writing, thanks to compression), or fits the same text in a much smaller code. Short texts such as links stay plain black and white, so any phone can still read them.
+
 ﻿![cover-v5-optimized](./samples/sample-sonnet18-card.png)
 
 ## Live Demo (GitHub.io)
 
 [![ Editor ](https://img.shields.io/badge/demo-live-green)](https://daragontech.github.io/TriLayerQR/src/trilayerqr.editor.v1.html)
 [![ Scanner ](https://img.shields.io/badge/demo-live-green)](https://daragontech.github.io/TriLayerQR/src/trilayerqr.scanner.v1.html)
+[![ Simple ](https://img.shields.io/badge/demo-live-green)](https://daragontech.github.io/TriLayerQR/src/trilayerqr.simple.v1.html)
 
 ## Live Demo (Daragon.tech)
 

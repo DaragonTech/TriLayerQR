@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TriLayerQR Simple v1</title>
+<style>
+:root {
+  --bg: #f3f5f9; --panel: #ffffff; --ink: #141a26; --muted: #5d6679; --line: #dde2ec;
+  --field: #ffffff; --accent: #2456e6; --accent-ink: #ffffff; --chip: #eef2fb; --ok: #15803d; --err: #c62828;
+  --stage: #eef1f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d111a; --panel: #151b27; --ink: #e8ecf5; --muted: #98a2b8; --line: #283043;
+    --field: #0f141e; --accent: #5b8cff; --accent-ink: #0b1020; --chip: #1c2436; --ok: #4ade80; --err: #f87171;
+    --stage: #0f141e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.page { max-width: 1080px; margin: 0 auto; padding: 24px 16px 40px; }
+header h1 { margin: 0 0 4px; font-size: 1.5rem; letter-spacing: -0.01em; }
+header p { margin: 0 0 20px; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.panel h2 { margin: 0 0 12px; font-size: 1.1rem; }
+textarea { width: 100%; min-height: 150px; resize: vertical; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--ink); font: inherit; }
+select { padding: 7px 9px; border-radius: 9px; border: 1px solid var(--line); background: var(--field); color: var(--ink); font: inherit; font-size: 14px; }
+label.opt { display: inline-flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 650; color: var(--muted); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin: 12px 0; }
+button, .btn { appearance: none; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 650; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+button.secondary, .btn.secondary { background: var(--chip); color: var(--ink); }
+button:disabled { opacity: .5; cursor: default; }
+.stage { background: var(--stage); border-radius: 12px; padding: 14px; display: grid; place-items: center; min-height: 240px; }
+#qrCanvas { max-width: 100%; height: auto; image-rendering: pixelated; border-radius: 4px; }
+#qrCanvas[hidden] { display: none; }
+.empty { color: var(--muted); font-size: 13.5px; text-align: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; min-height: 26px; }
+.chip { background: var(--chip); border-radius: 99px; padding: 3px 10px; font-size: 12.5px; }
+.chip b { font-weight: 700; }
+.note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.msg { font-size: 13.5px; margin: 8px 0; min-height: 1.4em; }
+.msg.ok { color: var(--ok); } .msg.err { color: var(--err); }
+video { width: 100%; border-radius: 12px; background: #000; margin-top: 4px; }
+video[hidden] { display: none; }
+footer { margin-top: 26px; color: var(--muted); font-size: 12.5px; text-align: center; }
+footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <h1>TriLayerQR Simple</h1>
+  <p>Everyday QR codes that hold more. Your text is compressed and, when it makes the code clearly smaller, split across the colors of the code: green carries one half, red and blue carry the other. Short texts such as links stay plain black and white, readable by any phone.</p>
+</header>
+
+<main class="grid">
+  <section class="panel">
+    <h2>Create</h2>
+    <textarea id="textIn" placeholder="Type or paste text, a link, contact details, a note…"></textarea>
+    <div class="row">
+      <label class="opt">Colors
+        <select id="mode">
+          <option value="auto" selected>Auto: smallest code</option>
+          <option value="color">Always use colors</option>
+          <option value="bw">Black and white only</option>
+        </select>
+      </label>
+      <label class="opt">Error correction
+        <select id="ecc">
+          <option value="L">Low (7%)</option>
+          <option value="M" selected>Medium (15%)</option>
+          <option value="Q">Quartile (25%)</option>
+          <option value="H">High (30%)</option>
+        </select>
+      </label>
+    </div>
+    <div class="stage">
+      <canvas id="qrCanvas" hidden></canvas>
+      <div id="qrEmpty" class="empty">Type something to create a code.</div>
+    </div>
+    <div id="chips" class="chips"></div>
+    <div id="encodeMsg" class="msg"></div>
+    <div class="row">
+      <label class="opt">PNG size
+        <select id="pngScale">
+          <option value="4">4 px per square</option>
+          <option value="8" selected>8 px per square</option>
+          <option value="12">12 px per square</option>
+          <option value="16">16 px per square</option>
+        </select>
+      </label>
+      <button id="savePngBtn" disabled>Save PNG</button>
+    </div>
+    <p class="note">Color codes are read by this page (camera or image). Black-and-white codes are ordinary QR codes that any scanner reads.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Read</h2>
+    <div class="row" style="margin-top:0">
+      <button id="camBtn">Scan with camera</button>
+      <label class="btn secondary">Open image<input id="fileIn" type="file" accept="image/*" hidden /></label>
+      <button id="readCurrentBtn" class="secondary" disabled>Read the code on the left</button>
+    </div>
+    <video id="video" playsinline muted hidden></video>
+    <div id="decodeMsg" class="msg">Scan a code with the camera, or open an image of one.</div>
+    <textarea id="textOut" readonly placeholder="The decoded text appears here."></textarea>
+    <div class="row"><button id="copyBtn" class="secondary" disabled>Copy text</button></div>
+  </section>
+</main>
+
+<footer>TriLayerQR Simple by <a href="https://daragon.tech">DaragonTech</a> · open source (MIT) · everything runs in your browser, nothing is uploaded.</footer>
+</div>
+
+<script src="vendor/qrcode-generator/qrcode.js"></script>
+<script src="vendor/jsqr/jsQR.js"></script>
+<script src="vendor/zxing-wasm/zxing-reader.iife.js"></script>
+<script>
+'use strict';
+/*
+  TriLayerQR Simple
+  ------------------
+  Black and white: an ordinary QR code holding the UTF-8 text, readable by any scanner.
+
+  Color (4 colors: white, black, green, magenta): two QR codes of the same size, one in
+  the green channel and one in the red and blue channels (red and blue carry identical
+  data, so the second layer reads reliably). Each layer holds:
+      'T' 'Q' | flags | chunk
+      flags: bit0 = part index (0 green, 1 red/blue), bit3 = deflate-compressed
+  The text (compressed when that is smaller) is split in two halves, one per layer.
+  "Auto" uses colors only when that gives a smaller code than black and white.
+*/
+const $ = id => document.getElementById(id);
+const MAGIC = [0x54, 0x51]; // 'TQ'
+const F_PART1 = 1, F_COMPRESSED = 8;
+const QUIET = 4;
+const AUTO_BW_MAX_VERSION = 6; // up to 41 x 41 squares a black-and-white code is kept
+const ZXING_WASM_URL = 'vendor/zxing-wasm/zxing_reader.wasm';
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+/* ---------- helpers ---------- */
+function bytesToQrString(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+function concat(...parts) {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+async function streamBytes(bytes, stream) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+}
+const deflate = b => typeof CompressionStream === 'undefined' ? Promise.resolve(null) : streamBytes(b, new CompressionStream('deflate-raw'));
+const inflate = b => streamBytes(b, new DecompressionStream('deflate-raw'));
+
+/* ---------- encoding ---------- */
+// Smallest QR version (1..40) whose byte capacity holds these bytes, or null.
+const fitCache = new Map();
+function fitsVersion(len, v, ecc) {
+  const key = `${len}|${v}|${ecc}`;
+  if (fitCache.has(key)) return fitCache.get(key);
+  let ok = true;
+  try { const q = qrcode(v, ecc); q.addData(bytesToQrString(new Uint8Array(len)), 'Byte'); q.make(); } catch { ok = false; }
+  fitCache.set(key, ok);
+  return ok;
+}
+function smallestVersion(len, ecc) {
+  if (!fitsVersion(len, 40, ecc)) return null;
+  let lo = 1, hi = 40;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (fitsVersion(len, mid, ecc)) hi = mid; else lo = mid + 1;
+  }
+  return lo;
+}
+function makeMatrix(bytes, version, ecc) {
+  const q = qrcode(version, ecc);
+  q.addData(bytesToQrString(bytes), 'Byte');
+  q.make();
+  return q;
+}
+
+async function planCode(text, mode, ecc) {
+  const raw = enc.encode(text);
+  const bwVersion = smallestVersion(raw.length, ecc);
+
+  const comp = await deflate(raw);
+  const compressed = !!comp && comp.length < raw.length;
+  const body = compressed ? comp : raw;
+  const half = Math.ceil(body.length / 2);
+  const flags = compressed ? F_COMPRESSED : 0;
+  const partA = concat(MAGIC, [flags], body.slice(0, half));
+  const partB = concat(MAGIC, [flags | F_PART1], body.slice(half));
+  const vA = smallestVersion(partA.length, ecc), vB = smallestVersion(partB.length, ecc);
+  const colorVersion = vA && vB ? Math.max(vA, vB) : null;
+
+  let useColor;
+  if (mode === 'bw') useColor = false;
+  else if (mode === 'color') useColor = !!colorVersion;
+  // Auto: small codes stay black and white, so every phone camera can read them (links,
+  // Wi-Fi, contacts). Colors are used when the text doesn't fit a standard QR, or when
+  // they make a larger code clearly smaller (at least two versions).
+  else useColor = !!colorVersion && (!bwVersion || (bwVersion > AUTO_BW_MAX_VERSION && colorVersion <= bwVersion - 2));
+
+  if (!useColor && !bwVersion) {
+    throw new Error(mode === 'bw' && colorVersion
+      ? 'Too long for a black-and-white QR code. Allow colors, or lower the error correction.'
+      : 'Too long, even with colors. Shorten the text or lower the error correction.');
+  }
+  return useColor
+    ? { color: true, version: colorVersion, layers: [partA, partB], compressed, raw, bwVersion, storedBytes: body.length }
+    : { color: false, version: bwVersion, layers: [raw], compressed: false, raw, bwVersion, colorVersion, storedBytes: raw.length };
+}
+
+// Draws the code with whole pixels per square (default 1 px, for the preview it is scaled by CSS).
+function drawCode(canvas, plan, ecc, scale) {
+  const g = makeMatrix(plan.layers[0], plan.version, ecc);
+  const rb = plan.color ? makeMatrix(plan.layers[1], plan.version, ecc) : null;
+  const n = g.getModuleCount(), size = (n + QUIET * 2) * scale;
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const d = img.data;
+  d.fill(255);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const gv = g.isDark(y, x) ? 0 : 255;
+      const mv = rb ? (rb.isDark(y, x) ? 0 : 255) : gv;
+      for (let yy = 0; yy < scale; yy++) {
+        let o = (((y + QUIET) * scale + yy) * size + (x + QUIET) * scale) * 4;
+        for (let xx = 0; xx < scale; xx++, o += 4) { d[o] = mv; d[o + 1] = gv; d[o + 2] = mv; }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return n;
+}
+
+let currentPlan = null;
+let encodeSeq = 0;
+async function updateCode() {
+  const seq = ++encodeSeq;
+  const text = $('textIn').value;
+  const ecc = $('ecc').value;
+  $('encodeMsg').textContent = '';
+  $('encodeMsg').className = 'msg';
+  if (!text) {
+    currentPlan = null;
+    $('qrCanvas').hidden = true;
+    $('qrEmpty').hidden = false;
+    $('chips').innerHTML = '';
+    $('savePngBtn').disabled = $('readCurrentBtn').disabled = true;
+    return;
+  }
+  try {
+    const plan = await planCode(text, $('mode').value, ecc);
+    if (seq !== encodeSeq) return;
+    currentPlan = { ...plan, ecc };
+    const canvas = $('qrCanvas');
+    const n = drawCode(canvas, plan, ecc, 8);
+    canvas.style.width = Math.min(420, canvas.width) + 'px';
+    canvas.hidden = false;
+    $('qrEmpty').hidden = true;
+    $('savePngBtn').disabled = $('readCurrentBtn').disabled = false;
+    const chip = (k, v) => `<span class="chip">${k} <b>${v}</b></span>`;
+    const chips = [
+      chip('Version', `${plan.version} (${n}×${n})`),
+      chip('Colors', plan.color ? '4' : 'black and white'),
+      chip('Text', `${plan.raw.length.toLocaleString()} bytes`),
+      plan.compressed ? chip('Compressed to', `${plan.storedBytes.toLocaleString()} bytes`) : ''
+    ];
+    if (plan.color) {
+      chips.push(plan.bwVersion
+        ? chip('Standard QR would be', `version ${plan.bwVersion} (${17 + 4 * plan.bwVersion}×${17 + 4 * plan.bwVersion})`)
+        : chip('Standard QR', 'too long to fit'));
+    }
+    $('chips').innerHTML = chips.join('');
+    if (plan.color && plan.bwVersion) {
+      const saved = 1 - (n * n) / Math.pow(17 + 4 * plan.bwVersion, 2);
+      $('encodeMsg').textContent = `${Math.round(saved * 100)}% fewer squares than a standard QR, so it scans from farther away and prints smaller.`;
+      $('encodeMsg').className = 'msg ok';
+    } else if (plan.color) {
+      $('encodeMsg').textContent = 'This text does not fit in any standard QR code; the colors make it fit.';
+      $('encodeMsg').className = 'msg ok';
+    } else if ($('mode').value === 'auto') {
+      $('encodeMsg').textContent = plan.colorVersion && plan.colorVersion < plan.version
+        ? 'Kept black and white: the code is small, and any phone camera can read it. Choose "Always use colors" for an even smaller one.'
+        : 'Black and white is already the smallest code for this text, so any phone camera can read it.';
+    }
+  } catch (err) {
+    if (seq !== encodeSeq) return;
+    currentPlan = null;
+    $('qrCanvas').hidden = true;
+    $('qrEmpty').hidden = false;
+    $('chips').innerHTML = '';
+    $('savePngBtn').disabled = $('readCurrentBtn').disabled = true;
+    $('encodeMsg').textContent = err.message || String(err);
+    $('encodeMsg').className = 'msg err';
+  }
+}
+
+let encTimer = 0;
+$('textIn').addEventListener('input', () => { clearTimeout(encTimer); encTimer = setTimeout(updateCode, 200); });
+$('mode').addEventListener('change', updateCode);
+$('ecc').addEventListener('change', updateCode);
+
+$('savePngBtn').addEventListener('click', () => {
+  if (!currentPlan) return;
+  const c = document.createElement('canvas');
+  drawCode(c, currentPlan, currentPlan.ecc, Number($('pngScale').value));
+  c.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = currentPlan.color ? 'trilayerqr.png' : 'qr.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }, 'image/png');
+});
+
+/* ---------- reading ---------- */
+function zxingAvailable() { return typeof ZXingWASM !== 'undefined' && ZXingWASM.readBarcodes; }
+if (zxingAvailable()) {
+  try {
+    ZXingWASM.setZXingModuleOverrides({ locateFile: (file, prefix) => (file.endsWith('.wasm') ? ZXING_WASM_URL : prefix + file) });
+    ZXingWASM.prepareZXingModule({ fireImmediately: true }).catch(() => {});
+  } catch { /* jsQR fallback */ }
+}
+
+async function scanBytes(imageData, invert = true) {
+  if (zxingAvailable()) {
+    try {
+      const found = await ZXingWASM.readBarcodes(imageData, { formats: ['QRCode'], tryHarder: true, tryInvert: invert, maxNumberOfSymbols: 1 });
+      if (found.length && found[0].isValid) return Uint8Array.from(found[0].bytes);
+    } catch { /* WASM unavailable -> jsQR */ }
+  }
+  const j = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: invert ? 'attemptBoth' : 'dontInvert' });
+  return j ? Uint8Array.from(j.binaryData) : null;
+}
+
+// One channel (or red+blue averaged) as a gray image.
+function channelImage(src, which) {
+  const s = src.data, out = new ImageData(src.width, src.height), d = out.data;
+  for (let i = 0; i < s.length; i += 4) {
+    const v = which === 'rb' ? (s[i] + s[i + 2]) >> 1 : s[i + which];
+    d[i] = d[i + 1] = d[i + 2] = v;
+    d[i + 3] = 255;
+  }
+  return out;
+}
+
+const isLayer = b => b && b.length >= 3 && b[0] === MAGIC[0] && b[1] === MAGIC[1];
+
+/*
+  Reads a code from an image. parts (Map) collects color layers across calls (camera frames).
+  Returns { text, color } when complete, { pending: true } when one color layer is still
+  missing, or null when no code is found.
+*/
+async function readImage(imageData, parts = new Map()) {
+  const first = await scanBytes(imageData);
+  if (!first) return null;
+  if (!isLayer(first)) return { text: dec.decode(first), color: false };
+  const keep = b => { if (isLayer(b) && !parts.has(b[2] & F_PART1)) parts.set(b[2] & F_PART1, b); };
+  keep(first);
+  for (const which of [1, 'rb', 0, 2]) { // green, red+blue, red, blue
+    if (parts.size === 2) break;
+    keep(await scanBytes(channelImage(imageData, which), false));
+  }
+  if (parts.size < 2) return { pending: true, found: parts.size };
+  const a = parts.get(0), b = parts.get(1);
+  let body = concat(a.slice(3), b.slice(3));
+  if (a[2] & F_COMPRESSED) body = await inflate(body);
+  return { text: dec.decode(body), color: true };
+}
+
+function showResult(r) {
+  $('textOut').value = r.text;
+  $('copyBtn').disabled = false;
+  $('decodeMsg').textContent = r.color ? 'Read a TriLayerQR color code.' : 'Read a standard QR code.';
+  $('decodeMsg').className = 'msg ok';
+}
+function showDecodeError(msg) {
+  $('decodeMsg').textContent = msg;
+  $('decodeMsg').className = 'msg err';
+}
+
+async function readFromCanvasSource(source, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0, w, h);
+  const r = await readImage(ctx.getImageData(0, 0, w, h));
+  if (!r) return showDecodeError('No QR code found in this image.');
+  if (r.pending) return showDecodeError('Found the green layer, but the red/blue layer could not be read. Try a sharper image with true colors.');
+  showResult(r);
+}
+
+$('fileIn').addEventListener('change', async () => {
+  const f = $('fileIn').files[0];
+  if (!f) return;
+  stopCamera();
+  $('decodeMsg').textContent = 'Reading…';
+  $('decodeMsg').className = 'msg';
+  try {
+    const img = new Image();
+    img.src = URL.createObjectURL(f);
+    await img.decode();
+    await readFromCanvasSource(img, img.naturalWidth, img.naturalHeight);
+    URL.revokeObjectURL(img.src);
+  } catch (err) {
+    showDecodeError(err.message || String(err));
+  }
+  $('fileIn').value = '';
+});
+
+$('readCurrentBtn').addEventListener('click', () => {
+  const c = $('qrCanvas');
+  readFromCanvasSource(c, c.width, c.height).catch(err => showDecodeError(err.message || String(err)));
+});
+
+$('copyBtn').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('textOut').value); $('copyBtn').textContent = 'Copied'; }
+  catch { $('textOut').select(); }
+  setTimeout(() => { $('copyBtn').textContent = 'Copy text'; }, 1500);
+});
+
+/* ---------- camera ---------- */
+let stream = null, scanning = false, busy = false, frameToggle = false;
+let camParts = null, camDeadline = 0;
+const video = $('video');
+const frameCanvas = document.createElement('canvas');
+
+function stopCamera() {
+  scanning = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  video.hidden = true;
+  $('camBtn').textContent = 'Scan with camera';
+}
+
+// Alternates the whole frame with its center at full resolution (acts like a 2x zoom).
+function grabFrame() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  frameToggle = !frameToggle;
+  const frac = frameToggle ? 1 : 0.5;
+  const cw = vw * frac, ch = vh * frac, k = Math.min(1, 1400 / Math.max(cw, ch));
+  frameCanvas.width = Math.round(cw * k);
+  frameCanvas.height = Math.round(ch * k);
+  const ctx = frameCanvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(video, (vw - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, frameCanvas.width, frameCanvas.height);
+  return ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height);
+}
+
+async function tick() {
+  if (!scanning) return;
+  if (!busy && video.readyState >= 2) {
+    busy = true;
+    try {
+      const frame = grabFrame();
+      const r = frame ? await readImage(frame, camParts || (camParts = new Map())) : null;
+      if (r && !r.pending) { stopCamera(); showResult(r); camParts = null; return; }
+      if (r && r.pending) {
+        if (!camDeadline) camDeadline = performance.now() + 6000;
+        $('decodeMsg').textContent = 'Color code found. Reading the second layer… hold steady, fill the frame.';
+        $('decodeMsg').className = 'msg';
+        if (performance.now() > camDeadline) {
+          stopCamera();
+          showDecodeError('Could not read the red/blue layer. Try closer, with steady light, or open a photo instead.');
+          camParts = null;
+          return;
+        }
+      } else if (!r && !camDeadline) {
+        camParts = new Map();
+      }
+    } finally { busy = false; }
+  }
+  requestAnimationFrame(tick);
+}
+
+$('camBtn').addEventListener('click', async () => {
+  if (scanning) return stopCamera();
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return showDecodeError('The camera needs HTTPS (or localhost). You can still open an image.');
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    video.srcObject = stream;
+    video.hidden = false;
+    await video.play();
+    scanning = true;
+    camParts = new Map();
+    camDeadline = 0;
+    $('camBtn').textContent = 'Stop camera';
+    $('decodeMsg').textContent = 'Looking for a code…';
+    $('decodeMsg').className = 'msg';
+    requestAnimationFrame(tick);
+  } catch (err) {
+    stopCamera();
+    showDecodeError('Camera not available: ' + (err.message || err.name || err));
+  }
+});
+window.addEventListener('pagehide', stopCamera);
+</script>
+</body>
+</html>
